@@ -54,7 +54,7 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
       const res = await fetch('/api/roadmap/expand', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ node, profile: roadmap.company, employees }),
+        body: JSON.stringify({ node, profile: roadmap.company, board: roadmap.board, employees }),
       });
       const data = await res.json();
       

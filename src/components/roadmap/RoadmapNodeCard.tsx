@@ -1,7 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronRight, ChevronDown, Loader2, TrendingUp, Wallet, DollarSign, Circle, User } from "lucide-react"
+import { ChevronRight, ChevronDown, Loader2, TrendingUp, Wallet, DollarSign, Circle, User, BarChart3 } from "lucide-react"
 import { RoadmapNode, CashflowStatus, LEVEL_ICONS } from "@/lib/roadmap-types"
 import { formatVND } from '@/lib/format'
 
@@ -21,6 +21,7 @@ export function RoadmapNodeCard({ node, depth, onExpand }: Props) {
   const colors = statusColors[node.cashflowStatus];
   const isTask = node.level === 'task';
   const isDay = node.level === 'day';
+  const isQuarter = node.level === 'quarter';
   const canExpand = !isTask;
   const hasChildren = node.children && node.children.length > 0;
   const indent = depth * 1;
@@ -79,6 +80,24 @@ export function RoadmapNodeCard({ node, depth, onExpand }: Props) {
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{node.description}</p>
               )}
 
+              {/* Quarter-level: theme subtitle */}
+              {isQuarter && node.theme && (
+                <p className="text-sm font-semibold text-primary mt-1.5 tracking-tight">
+                  🎯 {node.theme}
+                </p>
+              )}
+
+              {/* Quarter-level: milestones badges */}
+              {isQuarter && node.milestones && node.milestones.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {node.milestones.map((ms, i) => (
+                    <span key={i} className="inline-flex items-center text-[10px] font-medium bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 rounded-full">
+                      🏁 {ms}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {/* Financial summary — only for non-task nodes */}
               {!isTask && (
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-3 text-xs">
@@ -114,6 +133,21 @@ export function RoadmapNodeCard({ node, depth, onExpand }: Props) {
                     <User className="w-3 h-3" />
                     {node.assigneeName}
                   </span>
+                </div>
+              )}
+
+              {/* Task-level: personal KPI */}
+              {isTask && node.personalKPI && (
+                <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-muted-foreground">
+                  <BarChart3 className="w-3 h-3 text-primary" />
+                  <span className="font-medium">{node.personalKPI}</span>
+                </div>
+              )}
+
+              {/* Task-level: bonus info */}
+              {isTask && node.bonusPercent != null && node.bonusAmount != null && (
+                <div className="mt-1.5 text-[11px] font-semibold text-emerald-600">
+                  💰 Thưởng: +{node.bonusPercent}% lương (~{formatVND(node.bonusAmount)})
                 </div>
               )}
 

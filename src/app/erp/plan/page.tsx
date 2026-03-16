@@ -1,495 +1,904 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Card, CardContent } from "@/components/ui/Card"
-import { 
-  Building2, Target, DollarSign, ArrowRight, Sparkles, Check, 
-  Package, Factory, Users, Wallet, TrendingUp, Edit3, Loader2
+import {
+  Building2, Target, ArrowRight, ArrowLeft, Sparkles, Check,
+  Package, Users, Wallet, TrendingUp, DollarSign,
+  AlertTriangle, CheckCircle2, XCircle, Edit3,
+  BarChart3, Briefcase, UserPlus, BadgePercent, Eye,
 } from "lucide-react"
-import { useWizard } from "@/components/wizard/useWizard"
 import { useAppContext } from "@/context/AppContext"
-import { CompanyProfile } from "@/lib/roadmap-types"
-import { CompanySuggestion, DepartmentSuggestion } from "@/lib/ai-suggest"
-import { formatVND } from '@/lib/format'
+import {
+  CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan,
+  RoadmapNode,
+} from "@/lib/roadmap-types"
+import { formatVND } from "@/lib/format"
+
+// ============================================================
+// Constants
+// ============================================================
 
 const INDUSTRIES = [
-  'Công nghệ', 'Bán lẻ', 'Dịch vụ', 'Sản xuất', 'F&B',
-  'Bất động sản', 'Giáo dục', 'Y tế', 'Tài chính', 'Khác'
-];
+  "Công nghệ", "Bán lẻ", "Dịch vụ", "Sản xuất", "F&B",
+  "Bất động sản", "Giáo dục", "Y tế", "Tài chính", "Khác",
+]
 
-// ---- Bước 1-4: Thu thập thông tin chiến lược ----
-const inputSteps = [
-  {
-    title: "Hồ sơ Doanh nghiệp",
-    description: "Tên công ty hoặc doanh nghiệp của bạn?",
-    icon: Building2, field: "companyName",
-    placeholder: "VD: Công ty TNHH ABC Việt Nam",
-    label: "Tên Doanh nghiệp", type: "text",
-  },
-  {
-    title: "Ngành nghề",
-    description: "Doanh nghiệp hoạt động trong lĩnh vực nào?",
-    icon: Factory, field: "industry",
-    placeholder: "", label: "Ngành nghề kinh doanh",
-    type: "select", options: INDUSTRIES,
-  },
-  {
-    title: "Mục tiêu & Doanh thu",
-    description: "Mục tiêu chiến lược và doanh thu kỳ vọng năm nay?",
-    icon: Target, field: "objective",
-    placeholder: "VD: Mở rộng thị trường miền Bắc, đạt 1000 khách hàng",
-    label: "Mục tiêu Chiến lược", type: "text",
-    extraField: { field: "revenue", label: "Doanh thu mục tiêu (VNĐ)", placeholder: "VD: 5000000000", type: "number" },
-  },
-  {
-    title: "Sản phẩm / Dịch vụ",
-    description: "Sản phẩm hoặc dịch vụ chính của doanh nghiệp?",
-    icon: Package, field: "products",
-    placeholder: "VD: Phần mềm quản lý bán hàng, Tư vấn chuyển đổi số",
-    label: "Sản phẩm / Dịch vụ chính", type: "text",
-  },
-];
+const INDUSTRY_ICONS: Record<string, string> = {
+  "Công nghệ": "💻", "Bán lẻ": "🛒", "Dịch vụ": "🤝", "Sản xuất": "🏭",
+  "F&B": "🍜", "Bất động sản": "🏠", "Giáo dục": "📚", "Y tế": "🏥",
+  "Tài chính": "🏦", "Khác": "📦",
+}
 
-const TOTAL_STEPS = inputSteps.length + 1; // +1 cho bước AI suggest
+const BUDGET_KEYS = ["cogs", "hr", "marketing", "operations", "profit"] as const
+const BUDGET_LABELS: Record<string, string> = {
+  cogs: "Chi phí hàng hoá (COGS)",
+  hr: "Nhân sự (HR)",
+  marketing: "Marketing",
+  operations: "Vận hành (Ops)",
+  profit: "Lợi nhuận",
+}
+const BUDGET_COLORS: Record<string, string> = {
+  cogs: "bg-orange-500",
+  hr: "bg-blue-500",
+  marketing: "bg-violet-500",
+  operations: "bg-emerald-500",
+  profit: "bg-amber-400",
+}
+
+type Screen = "input" | "loading" | "results"
+type ResultTab = "cfo" | "ceo" | "hr"
+
+// ============================================================
+// Cashflow Health Indicator
+// ============================================================
+
+function CashflowHealth({ revenue, expense }: { revenue: number; expense: number }) {
+  const margin = revenue > 0 ? ((revenue - expense) / revenue) * 100 : -100
+  const isHealthy = margin >= 10
+  const isWarning = margin >= 0 && margin < 10
+  return (
+    <div className={`rounded-xl border p-3 flex items-center gap-3 text-sm ${
+      isHealthy ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800"
+        : isWarning ? "bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800"
+        : "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
+    }`}>
+      <span className="text-xl">{isHealthy ? "💚" : isWarning ? "🟡" : "🔴"}</span>
+      <div className="flex-1 min-w-0">
+        <p className={`font-bold text-xs ${
+          isHealthy ? "text-emerald-700 dark:text-emerald-400"
+            : isWarning ? "text-amber-700 dark:text-amber-400"
+            : "text-red-700 dark:text-red-400"
+        }`}>
+          {isHealthy ? "Dòng tiền KHOẺ" : isWarning ? "Dòng tiền CẦN LƯU Ý" : "Dòng tiền NGUY HIỂM"}
+          {" · "}Biên lợi nhuận {margin.toFixed(1)}%
+        </p>
+        <p className={`text-[11px] ${
+          isHealthy ? "text-emerald-600 dark:text-emerald-500"
+            : isWarning ? "text-amber-600 dark:text-amber-500"
+            : "text-red-600 dark:text-red-500"
+        }`}>
+          Doanh thu {formatVND(revenue)} − Chi phí {formatVND(expense)} = <strong>{formatVND(revenue - expense)}</strong>
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Main Component
+// ============================================================
 
 export default function PlanWizardPage() {
   const router = useRouter()
   const { setFinance, setRoadmap } = useAppContext()
-  const { currentStep, nextStep, prevStep, goToStep, isFirstStep } = useWizard(TOTAL_STEPS)
-  
-  const [formData, setFormData] = useState<Record<string, string>>({
-    companyName: "", industry: "Công nghệ", objective: "",
-    revenue: "", products: "",
-  })
-  const [suggestion, setSuggestion] = useState<CompanySuggestion | null>(null)
-  const [editingDept, setEditingDept] = useState<number | null>(null)
-  const [isLoadingSuggest, setIsLoadingSuggest] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [genStep, setGenStep] = useState(0)
 
-  const isInputPhase = currentStep < inputSteps.length;
-  const isSuggestPhase = currentStep === inputSteps.length;
+  // ---------- Screen state ----------
+  const [screen, setScreen] = useState<Screen>("input")
+  const [activeTab, setActiveTab] = useState<ResultTab>("cfo")
 
-  // ---- Validation ----
-  const isCurrentValid = () => {
-    if (!isInputPhase) return true;
-    const step = inputSteps[currentStep];
-    const val = formData[step.field]?.trim();
-    if (!val) return false;
-    if (step.extraField) {
-      const extraVal = formData[step.extraField.field]?.trim();
-      if (!extraVal) return false;
-    }
-    return true;
-  };
+  // ---------- Input form ----------
+  const [companyName, setCompanyName] = useState("")
+  const [industry, setIndustry] = useState("")
+  const [objective, setObjective] = useState("")
+  const [revenue, setRevenue] = useState("")
+  const [products, setProducts] = useState("")
 
-  // ---- Next step handler ----
-  const handleNext = async () => {
-    if (isInputPhase && currentStep === inputSteps.length - 1) {
-      // Last input step → call AI suggest
-      nextStep();
-      setIsLoadingSuggest(true);
-      try {
-        const res = await fetch('/api/roadmap/suggest', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            industry: formData.industry,
-            targetRevenue: parseInt(formData.revenue) || 1_000_000_000,
-          }),
-        });
-        const data = await res.json();
-        setSuggestion(data);
-      } catch { /* fallback: suggestion stays null */ }
-      setIsLoadingSuggest(false);
-    } else if (isInputPhase) {
-      nextStep();
-    }
-  };
+  // ---------- Loading animation ----------
+  const [loadStep, setLoadStep] = useState(0)
 
-  // ---- Generate Roadmap ----
-  const handleGenerate = async () => {
-    if (!suggestion) return;
-    setIsGenerating(true);
-    setGenStep(0);
+  // ---------- Result state ----------
+  const [board, setBoard] = useState<BoardAnalysis | null>(null)
+  const [tree, setTree] = useState<RoadmapNode | null>(null)
+  const [generatedAt, setGeneratedAt] = useState("")
+
+  // ---- Derived: input valid ----
+  const isInputValid = companyName.trim() !== "" && industry !== "" &&
+    objective.trim() !== "" && revenue.trim() !== "" && products.trim() !== ""
+
+  // ---- Derived: revenue as number ----
+  const revenueNum = parseInt(revenue) || 0
+
+  // ============================================================
+  // AI Analysis — call POST /api/roadmap
+  // ============================================================
+
+  const handleAnalyze = async () => {
+    setScreen("loading")
+    setLoadStep(0)
 
     const profile: CompanyProfile = {
-      companyName: formData.companyName,
-      industry: formData.industry,
-      objective: formData.objective,
-      revenue: parseInt(formData.revenue) || 1_000_000_000,
-      headcount: suggestion.totalHeadcount,
-      fixedCost: suggestion.monthlyFixedCost,
-      products: formData.products,
-    };
+      companyName,
+      industry,
+      objective,
+      revenue: revenueNum,
+      headcount: 0,
+      fixedCost: 0,
+      products,
+    }
 
-    setFinance({
-      targetRevenue: profile.revenue,
-      allocations: { cogs: 15, hr: 35, mkt: 20, ops: 10, profit: 20 },
-    });
-
-    const timers = [500, 1200, 2000];
-    timers.forEach((ms, i) => setTimeout(() => setGenStep(i + 1), ms));
+    // Progressive loading animation
+    const t1 = setTimeout(() => setLoadStep(1), 800)
+    const t2 = setTimeout(() => setLoadStep(2), 1800)
+    const t3 = setTimeout(() => setLoadStep(3), 2800)
 
     try {
-      const res = await fetch('/api/roadmap', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/roadmap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
-      });
-      const data = await res.json();
-      setRoadmap({ company: profile, tree: data.tree, generatedAt: data.generatedAt });
-      await new Promise(r => setTimeout(r, 600));
-      router.push('/erp/plan/view');
+      })
+      const data = await res.json()
+
+      // Wait until at least step 3 visible
+      await new Promise(r => setTimeout(r, 3200))
+
+      setBoard(data.board)
+      setTree(data.tree)
+      setGeneratedAt(data.generatedAt)
+
+      // Update finance context with CFO allocations
+      if (data.board?.cfo) {
+        const cfo = data.board.cfo as CFOAnalysis
+        setFinance({
+          targetRevenue: revenueNum,
+          allocations: {
+            cogs: cfo.budgetAllocation.cogs.percent,
+            hr: cfo.budgetAllocation.hr.percent,
+            mkt: cfo.budgetAllocation.marketing.percent,
+            ops: cfo.budgetAllocation.operations.percent,
+            profit: cfo.budgetAllocation.profit.percent,
+          },
+        })
+      }
+
+      setScreen("results")
     } catch {
-      setIsGenerating(false);
+      setScreen("input")
+    } finally {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
     }
-  };
+  }
 
-  // ---- Edit department in suggestion ----
-  const updateDept = (idx: number, field: keyof DepartmentSuggestion, value: number) => {
-    if (!suggestion) return;
-    const newDepts = [...suggestion.departments];
-    const dept = { ...newDepts[idx] };
-    if (field === 'headcount') {
-      dept.headcount = value;
-      dept.totalSalary = value * dept.avgSalary;
-    } else if (field === 'avgSalary') {
-      dept.avgSalary = value;
-      dept.totalSalary = dept.headcount * value;
+  // ============================================================
+  // Board edit helpers
+  // ============================================================
+
+  const updateCFO = useCallback((updater: (cfo: CFOAnalysis) => CFOAnalysis) => {
+    setBoard(prev => prev ? { ...prev, cfo: updater(prev.cfo) } : prev)
+  }, [])
+
+  const updateCEO = useCallback((updater: (ceo: CEOStrategy) => CEOStrategy) => {
+    setBoard(prev => prev ? { ...prev, ceo: updater(prev.ceo) } : prev)
+  }, [])
+
+  const updateHR = useCallback((updater: (hr: HRPlan) => HRPlan) => {
+    setBoard(prev => prev ? { ...prev, hr: updater(prev.hr) } : prev)
+  }, [])
+
+  // ---- CFO: change budget % and recalculate amounts ----
+  const handleBudgetChange = useCallback((key: string, newPercent: number) => {
+    updateCFO(cfo => {
+      const alloc = { ...cfo.budgetAllocation }
+      const k = key as keyof typeof alloc
+      alloc[k] = { ...alloc[k], percent: newPercent, amount: Math.round(revenueNum * newPercent / 100) }
+      return { ...cfo, budgetAllocation: alloc }
+    })
+  }, [revenueNum, updateCFO])
+
+  // ---- HR: update department headcount/avgSalary ----
+  const handleDeptChange = useCallback((idx: number, field: "headcount" | "avgSalary", value: number) => {
+    updateHR(hr => {
+      const depts = [...hr.departments]
+      const d = { ...depts[idx] }
+      if (field === "headcount") { d.headcount = value; d.totalSalary = value * d.avgSalary }
+      else { d.avgSalary = value; d.totalSalary = d.headcount * value }
+      depts[idx] = d
+      const monthlySalary = depts.reduce((s, x) => s + x.totalSalary, 0)
+      const totalHeadcount = depts.reduce((s, x) => s + x.headcount, 0)
+      return {
+        ...hr,
+        departments: depts,
+        totalHeadcount,
+        monthlySalary,
+        monthlyFixedCost: monthlySalary + hr.monthlyOpex,
+        yearlyFixedCost: (monthlySalary + hr.monthlyOpex) * 12,
+      }
+    })
+  }, [updateHR])
+
+  // ---- Approve & navigate ----
+  const handleApprove = () => {
+    if (!board || !tree) return
+    const profile: CompanyProfile = {
+      companyName, industry, objective,
+      revenue: revenueNum,
+      headcount: board.hr.totalHeadcount,
+      fixedCost: board.hr.monthlyFixedCost,
+      products,
     }
-    dept.description = `${dept.headcount} người · Lương TB ${formatVND(dept.avgSalary)}/tháng`;
-    newDepts[idx] = dept;
-    const monthlySalary = newDepts.reduce((s, d) => s + d.totalSalary, 0);
-    const totalHeadcount = newDepts.reduce((s, d) => s + d.headcount, 0);
-    setSuggestion({
-      ...suggestion,
-      departments: newDepts,
-      totalHeadcount,
-      monthlySalary,
-      monthlyFixedCost: monthlySalary + suggestion.monthlyOpex,
-      yearlyFixedCost: (monthlySalary + suggestion.monthlyOpex) * 12,
-    });
-  };
+    setRoadmap({ company: profile, board, tree, generatedAt })
+    router.push("/erp/plan/view")
+  }
 
-  // ---- Generating animation ----
-  if (isGenerating) {
-    const genSteps = [
-      'Phân tích mô hình kinh doanh...',
-      'Phân bổ ngân sách từng quý & phòng ban...',
-      'Kiểm tra sức khoẻ dòng tiền...',
-      'Hoàn thành! Đang mở Roadmap...',
-    ];
+  // ---- Computed cashflow for header ----
+  const cashflow = useMemo(() => {
+    if (!board) return { revenue: 0, expense: 0 }
+    return { revenue: revenueNum, expense: board.hr.yearlyFixedCost }
+  }, [board, revenueNum])
+
+  // ==========================================================
+  // SCREEN 1: Input
+  // ==========================================================
+  if (screen === "input") {
     return (
-      <div className="flex flex-col items-center justify-center space-y-8 py-16 w-full max-w-md mx-auto">
+      <div className="max-w-3xl mx-auto py-6 md:py-10 px-4">
+        {/* Header */}
+        <div className="text-center space-y-2 mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+            <Sparkles className="w-3.5 h-3.5" /> Ban Giám đốc AI
+          </div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">
+            Phân tích Chiến lược <span className="text-gradient">Doanh nghiệp</span>
+          </h1>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            Nhập thông tin doanh nghiệp — CFO, CEO, HR Director sẽ phân tích và đề xuất kế hoạch toàn diện.
+          </p>
+        </div>
+
+        <Card className="glass-card overflow-hidden">
+          <CardContent className="p-5 md:p-7 space-y-6">
+            {/* ---- Step A: Company Profile ---- */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shadow">A</div>
+                <div>
+                  <h2 className="text-sm font-bold text-foreground">Hồ sơ Doanh nghiệp</h2>
+                  <p className="text-[11px] text-muted-foreground">Tên công ty và ngành nghề kinh doanh</p>
+                </div>
+              </div>
+
+              {/* Company name */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Tên Doanh nghiệp</label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="VD: Công ty TNHH ABC Việt Nam"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="pl-10 h-11 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Industry select grid */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ngành nghề</label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {INDUSTRIES.map((ind) => (
+                    <button key={ind} onClick={() => setIndustry(ind)}
+                      className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl text-[11px] font-medium border transition-all ${
+                        industry === ind
+                          ? "bg-primary text-white border-primary shadow-md scale-[1.03]"
+                          : "bg-background border-border text-foreground hover:border-primary/40"
+                      }`}
+                    >
+                      <span className="text-base">{INDUSTRY_ICONS[ind]}</span>
+                      {ind}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-border" />
+
+            {/* ---- Step B: Strategy ---- */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shadow">B</div>
+                <div>
+                  <h2 className="text-sm font-bold text-foreground">Mục tiêu Chiến lược</h2>
+                  <p className="text-[11px] text-muted-foreground">Mục tiêu, doanh thu kỳ vọng và sản phẩm/dịch vụ</p>
+                </div>
+              </div>
+
+              {/* Objective */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Mục tiêu chiến lược</label>
+                <div className="relative">
+                  <Target className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="VD: Mở rộng thị trường miền Bắc, đạt 1000 khách hàng"
+                    value={objective}
+                    onChange={(e) => setObjective(e.target.value)}
+                    className="pl-10 h-11 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Revenue */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Doanh thu mục tiêu (VNĐ)</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="number"
+                    placeholder="VD: 5000000000"
+                    value={revenue}
+                    onChange={(e) => setRevenue(e.target.value)}
+                    className="pl-10 h-11 text-sm"
+                  />
+                </div>
+                {revenueNum > 0 && (
+                  <p className="text-[11px] text-muted-foreground pl-1">= {formatVND(revenueNum)}</p>
+                )}
+              </div>
+
+              {/* Products */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Sản phẩm / Dịch vụ chính</label>
+                <div className="relative">
+                  <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="VD: Phần mềm quản lý bán hàng, Tư vấn chuyển đổi số"
+                    value={products}
+                    onChange={(e) => setProducts(e.target.value)}
+                    className="pl-10 h-11 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="pt-2">
+              <Button
+                variant="gradient" size="lg"
+                onClick={handleAnalyze}
+                disabled={!isInputValid}
+                className="w-full gap-2 font-bold text-base"
+              >
+                <Sparkles className="w-5 h-5" />
+                Ban Giám đốc AI phân tích
+                <ArrowRight className="w-5 h-5" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // ==========================================================
+  // SCREEN 2: AI Analysis Animation
+  // ==========================================================
+  if (screen === "loading") {
+    const steps = [
+      { emoji: "🧠", role: "CFO", text: "CFO đang phân tích tài chính..." },
+      { emoji: "👔", role: "CEO", text: "CEO đang xây dựng chiến lược..." },
+      { emoji: "👥", role: "HR Director", text: "HR Director đang thiết kế bộ máy..." },
+    ]
+
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 py-16 w-full max-w-md mx-auto px-4">
         <div className="relative">
-          <div className="absolute inset-0 rounded-full blur-2xl bg-primary/20 animate-pulse-soft" />
+          <div className="absolute inset-0 rounded-full blur-2xl bg-primary/20 animate-pulse" />
           <div className="h-20 w-20 rounded-full bg-background border border-border shadow-md flex items-center justify-center relative z-10">
-            <Sparkles className="h-8 w-8 text-primary animate-pulse-soft" />
+            <Sparkles className="h-8 w-8 text-primary animate-pulse" />
           </div>
         </div>
-        <div className="text-center space-y-4">
-          <h2 className="text-xl font-bold text-foreground">AI đang xây dựng Roadmap...</h2>
-          <div className="space-y-2.5 text-sm font-medium w-full max-w-xs mx-auto">
-            {genSteps.map((text, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: genStep >= i ? 1 : 0.3, y: 0 }}
-                transition={{ delay: i * 0.1, duration: 0.3 }}
-                className={`flex items-center gap-2 ${genStep >= i ? 'text-foreground' : 'text-muted-foreground/50'}`}
+
+        <div className="text-center space-y-6 w-full">
+          <h2 className="text-xl font-bold text-foreground">Ban Giám đốc AI đang phân tích...</h2>
+          <p className="text-sm text-muted-foreground">
+            Phân tích <strong>{companyName}</strong> · Ngành {industry}
+          </p>
+
+          <div className="space-y-3 text-sm font-medium">
+            {steps.map((s, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: loadStep >= i ? 1 : 0.3, y: 0 }}
+                transition={{ delay: i * 0.15, duration: 0.3 }}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+                  loadStep > i
+                    ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800"
+                    : loadStep === i
+                    ? "bg-primary/5 border-primary/20"
+                    : "bg-muted/30 border-border"
+                }`}
               >
-                {genStep > i ? <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                  : genStep === i ? <span className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0 inline-block" />
-                  : <span className="w-4 h-4 rounded-full border-2 border-border shrink-0 inline-block" />}
-                {text}
+                <span className="text-lg">{s.emoji}</span>
+                <span className={`flex-1 text-left ${loadStep >= i ? "text-foreground" : "text-muted-foreground/50"}`}>
+                  {s.text}
+                </span>
+                {loadStep > i ? (
+                  <Check className="w-5 h-5 text-emerald-500 shrink-0" />
+                ) : loadStep === i ? (
+                  <span className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0 inline-block" />
+                ) : (
+                  <span className="w-5 h-5 rounded-full border-2 border-border shrink-0 inline-block" />
+                )}
               </motion.div>
             ))}
           </div>
         </div>
       </div>
-    );
+    )
   }
 
-  // ---- BƯỚC 5: AI Suggest bộ máy ----
-  if (isSuggestPhase) {
-    return (
-      <div className="max-w-4xl mx-auto py-6">
-        {/* Header */}
-        <div className="text-center space-y-2 mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
-            <Sparkles className="w-3.5 h-3.5" /> AI đề xuất bộ máy
-          </div>
-          <h1 className="text-xl md:text-2xl font-extrabold text-foreground tracking-tight">
-            Cơ cấu Doanh nghiệp được AI đề xuất
-          </h1>
-          <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-            Dựa trên ngành <strong>{formData.industry}</strong> và mục tiêu <strong>{formatVND(parseInt(formData.revenue) || 0)}</strong>, 
-            AI đề xuất bộ máy bên dưới. Bạn có thể chỉnh sửa trước khi tạo Roadmap.
-          </p>
-        </div>
+  // ==========================================================
+  // SCREEN 3: Board Results — 3 Editable Tabs
+  // ==========================================================
+  if (!board) return null
 
-        {isLoadingSuggest ? (
-          <div className="flex flex-col items-center justify-center py-16 space-y-4">
-            <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            <p className="text-sm text-muted-foreground font-medium">AI đang phân tích mô hình kinh doanh...</p>
-          </div>
-        ) : suggestion ? (
-          <div className="space-y-6">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { label: 'Tổng nhân sự', value: `${suggestion.totalHeadcount} người`, icon: Users, color: 'text-blue-600' },
-                { label: 'Quỹ lương / tháng', value: formatVND(suggestion.monthlySalary), icon: Wallet, color: 'text-emerald-600' },
-                { label: 'Chi phí cố định / tháng', value: formatVND(suggestion.monthlyFixedCost), icon: DollarSign, color: 'text-amber-600' },
-                { label: 'Lợi nhuận dự kiến', value: `${suggestion.profitMargin}%`, icon: TrendingUp, color: 'text-violet-600' },
-              ].map((item) => (
-                <Card key={item.label} className="glass-card">
-                  <CardContent className="p-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <item.icon className={`w-4 h-4 ${item.color}`} />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{item.label}</span>
-                    </div>
-                    <p className="text-lg font-bold text-foreground">{item.value}</p>
+  const cfo = board.cfo
+  const ceo = board.ceo
+  const hr = board.hr
+
+  const tabs: { key: ResultTab; emoji: string; label: string }[] = [
+    { key: "cfo", emoji: "💰", label: "CFO: Tài chính" },
+    { key: "ceo", emoji: "👔", label: "CEO: Chiến lược" },
+    { key: "hr", emoji: "👥", label: "HR: Nhân sự" },
+  ]
+
+  // Budget total percent
+  const budgetTotalPercent = BUDGET_KEYS.reduce((s, k) => s + cfo.budgetAllocation[k].percent, 0)
+
+  return (
+    <div className="max-w-5xl mx-auto py-6 px-4 space-y-4">
+      {/* Header */}
+      <div className="text-center space-y-1">
+        <h1 className="text-xl md:text-2xl font-extrabold text-foreground tracking-tight">
+          Kết quả phân tích · <span className="text-gradient">{companyName}</span>
+        </h1>
+        <p className="text-xs text-muted-foreground">
+          Ngành {industry} · Doanh thu mục tiêu {formatVND(revenueNum)} · Chỉnh sửa trực tiếp bên dưới
+        </p>
+      </div>
+
+      {/* Cashflow Health — always visible */}
+      <CashflowHealth revenue={cashflow.revenue} expense={cashflow.expense} />
+
+      {/* Tab bar */}
+      <div className="flex gap-1 p-1 bg-muted/50 rounded-xl border border-border">
+        {tabs.map((t) => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+              activeTab === t.key
+                ? "bg-background text-foreground shadow-sm border border-border"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <span>{t.emoji}</span> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.15 }}
+        >
+          {/* ============ CFO TAB ============ */}
+          {activeTab === "cfo" && (
+            <div className="space-y-4">
+              {/* Feasibility Badge */}
+              <div className="flex items-center gap-3">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${
+                  cfo.feasibility === "Khả thi"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
+                    : cfo.feasibility === "Cần điều chỉnh"
+                    ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
+                    : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800"
+                }`}>
+                  {cfo.feasibility === "Khả thi" ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+                   cfo.feasibility === "Cần điều chỉnh" ? <AlertTriangle className="w-3.5 h-3.5" /> :
+                   <XCircle className="w-3.5 h-3.5" />}
+                  {cfo.feasibility}
+                </span>
+                <span className="text-xs text-muted-foreground">Đánh giá khả thi CFO</span>
+              </div>
+
+              {/* Analysis paragraph */}
+              <Card className="glass-card">
+                <CardContent className="p-4">
+                  <p className="text-sm text-foreground leading-relaxed">{cfo.analysis}</p>
+                </CardContent>
+              </Card>
+
+              {/* Budget Allocation */}
+              <Card className="glass-card">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <BarChart3 className="w-3.5 h-3.5" /> Phân bổ Ngân sách
+                    </h3>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      Math.abs(budgetTotalPercent - 100) < 0.5
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                        : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                    }`}>
+                      Tổng: {budgetTotalPercent.toFixed(0)}%
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {BUDGET_KEYS.map((key) => {
+                      const line = cfo.budgetAllocation[key]
+                      return (
+                        <div key={key} className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-foreground w-44 shrink-0 truncate">
+                              {BUDGET_LABELS[key]}
+                            </span>
+                            {/* Colored bar */}
+                            <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${BUDGET_COLORS[key]}`}
+                                style={{ width: `${Math.min(line.percent, 100)}%` }}
+                              />
+                            </div>
+                            {/* Editable % */}
+                            <input
+                              type="number"
+                              value={line.percent}
+                              onChange={(e) => handleBudgetChange(key, parseFloat(e.target.value) || 0)}
+                              className="w-14 h-7 text-xs font-bold text-center rounded-lg border border-border bg-background focus:ring-2 focus:ring-primary focus:outline-none"
+                            />
+                            <span className="text-[10px] text-muted-foreground">%</span>
+                            {/* Amount */}
+                            <span className="text-xs font-semibold text-foreground w-20 text-right tabular-nums">
+                              {formatVND(line.amount)}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Monthly burn + Break even */}
+              <div className="grid grid-cols-2 gap-3">
+                <Card className="glass-card">
+                  <CardContent className="p-4 space-y-1">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Chi phí vận hành / tháng</p>
+                    <p className="text-lg font-bold text-foreground">{formatVND(cfo.monthlyBurnRate)}</p>
                   </CardContent>
                 </Card>
-              ))}
+                <Card className="glass-card">
+                  <CardContent className="p-4 space-y-1">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Hoà vốn sau</p>
+                    <p className="text-lg font-bold text-foreground">{cfo.breakEvenMonth} tháng</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Risks */}
+              <Card className="glass-card">
+                <CardContent className="p-4 space-y-2">
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Rủi ro
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {cfo.risks.map((risk, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-foreground">
+                        <span className="text-amber-500 mt-0.5">⚠</span>
+                        {risk}
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
             </div>
+          )}
 
-            {/* Cashflow health check */}
-            {(() => {
-              const yearlyExpense = suggestion.yearlyFixedCost;
-              const yearlyRevenue = parseInt(formData.revenue) || 0;
-              const margin = yearlyRevenue > 0 ? ((yearlyRevenue - yearlyExpense) / yearlyRevenue * 100) : 0;
-              const isHealthy = margin >= 10;
-              const isWarning = margin >= 0 && margin < 10;
-              return (
-                <div className={`rounded-xl border p-4 flex items-center gap-4 ${
-                  isHealthy ? 'bg-emerald-50 border-emerald-200' : isWarning ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
-                }`}>
-                  <span className="text-2xl">{isHealthy ? '💚' : isWarning ? '🟡' : '🔴'}</span>
-                  <div className="flex-1">
-                    <p className={`text-sm font-bold ${isHealthy ? 'text-emerald-700' : isWarning ? 'text-amber-700' : 'text-red-700'}`}>
-                      {isHealthy ? 'Dòng tiền KHOẺ' : isWarning ? 'Dòng tiền CẦN LƯU Ý' : 'Dòng tiền NGUY HIỂM'}
-                    </p>
-                    <p className={`text-xs ${isHealthy ? 'text-emerald-600' : isWarning ? 'text-amber-600' : 'text-red-600'}`}>
-                      Doanh thu {formatVND(yearlyRevenue)} − Chi phí {formatVND(yearlyExpense)} = 
-                      Lợi nhuận <strong>{formatVND(yearlyRevenue - yearlyExpense)}</strong> ({margin.toFixed(1)}%)
-                    </p>
-                  </div>
-                </div>
-              );
-            })()}
+          {/* ============ CEO TAB ============ */}
+          {activeTab === "ceo" && (
+            <div className="space-y-4">
+              {/* Vision */}
+              <Card className="glass-card">
+                <CardContent className="p-4 space-y-2">
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5" /> Tầm nhìn chiến lược
+                  </h3>
+                  <textarea
+                    value={ceo.vision}
+                    onChange={(e) => updateCEO(c => ({ ...c, vision: e.target.value }))}
+                    className="w-full min-h-[80px] text-sm text-foreground bg-muted/30 rounded-xl border border-border p-3 resize-y focus:ring-2 focus:ring-primary focus:outline-none"
+                  />
+                </CardContent>
+              </Card>
 
-            {/* Department Cards */}
-            <div className="space-y-3">
-              <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Phòng ban & Nhân sự</h2>
+              {/* Quarter Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {suggestion.departments.map((dept, idx) => (
-                  <Card key={idx} className="glass-card hover:border-primary/20 transition-colors overflow-hidden">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="font-bold text-foreground text-sm">{dept.name}</h3>
-                          <p className="text-xs text-muted-foreground mt-0.5">{dept.description}</p>
-                        </div>
-                        <button 
-                          onClick={() => setEditingDept(editingDept === idx ? null : idx)}
-                          className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
+                {ceo.quarterlyGoals.map((q, qi) => (
+                  <Card key={qi} className="glass-card overflow-hidden">
+                    <div className="bg-primary/5 px-4 py-2 border-b border-border flex items-center justify-between">
+                      <span className="text-xs font-bold text-primary">Quý {q.quarter}</span>
+                      <span className="text-[10px] text-muted-foreground">{formatVND(q.revenue)} doanh thu</span>
+                    </div>
+                    <CardContent className="p-4 space-y-3">
+                      {/* Theme - editable */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase">Chủ đề</label>
+                        <Input
+                          value={q.theme}
+                          onChange={(e) => {
+                            updateCEO(c => {
+                              const goals = [...c.quarterlyGoals]
+                              goals[qi] = { ...goals[qi], theme: e.target.value }
+                              return { ...c, quarterlyGoals: goals }
+                            })
+                          }}
+                          className="h-8 text-xs"
+                        />
                       </div>
-                      
-                      {/* Roles */}
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {dept.keyRoles.map((role, i) => (
-                          <span key={i} className="text-[10px] font-medium bg-primary/5 text-primary px-2 py-0.5 rounded-full border border-primary/10">
-                            {role}
-                          </span>
+
+                      {/* Key objectives - editable */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase">Mục tiêu chính</label>
+                        {q.keyObjectives.map((obj, oi) => (
+                          <div key={oi} className="flex items-center gap-1.5">
+                            <span className="text-primary text-xs font-bold">{oi + 1}.</span>
+                            <input
+                              value={obj}
+                              onChange={(e) => {
+                                updateCEO(c => {
+                                  const goals = [...c.quarterlyGoals]
+                                  const objs = [...goals[qi].keyObjectives]
+                                  objs[oi] = e.target.value
+                                  goals[qi] = { ...goals[qi], keyObjectives: objs }
+                                  return { ...c, quarterlyGoals: goals }
+                                })
+                              }}
+                              className="flex-1 h-7 text-xs px-2 rounded-lg border border-border bg-background focus:ring-2 focus:ring-primary focus:outline-none"
+                            />
+                          </div>
                         ))}
                       </div>
 
-                      {/* Edit mode */}
-                      <AnimatePresence>
-                        {editingDept === idx && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="space-y-2 pt-3 border-t border-border"
-                          >
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="text-[10px] font-bold text-muted-foreground uppercase">Số người</label>
-                                <Input
-                                  type="number" value={dept.headcount}
-                                  onChange={(e) => updateDept(idx, 'headcount', parseInt(e.target.value) || 1)}
-                                  className="h-9 text-sm mt-1"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] font-bold text-muted-foreground uppercase">Lương TB (VNĐ)</label>
-                                <Input
-                                  type="number" value={dept.avgSalary}
-                                  onChange={(e) => updateDept(idx, 'avgSalary', parseInt(e.target.value) || 0)}
-                                  className="h-9 text-sm mt-1"
-                                />
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      {/* Summary */}
-                      <div className="flex justify-between items-center text-xs mt-2 pt-2 border-t border-border/50">
-                        <span className="text-muted-foreground">{dept.headcount} người × {formatVND(dept.avgSalary)}</span>
-                        <span className="font-bold text-foreground">{formatVND(dept.totalSalary)}/tháng</span>
+                      {/* Milestones - editable */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase">Milestones</label>
+                        {q.milestones.map((ms, mi) => (
+                          <div key={mi} className="flex items-center gap-1.5">
+                            <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                            <input
+                              value={ms}
+                              onChange={(e) => {
+                                updateCEO(c => {
+                                  const goals = [...c.quarterlyGoals]
+                                  const mils = [...goals[qi].milestones]
+                                  mils[mi] = e.target.value
+                                  goals[qi] = { ...goals[qi], milestones: mils }
+                                  return { ...c, quarterlyGoals: goals }
+                                })
+                              }}
+                              className="flex-1 h-7 text-xs px-2 rounded-lg border border-border bg-background focus:ring-2 focus:ring-primary focus:outline-none"
+                            />
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
-            </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-between pt-4">
-              <Button variant="ghost" onClick={() => goToStep(inputSteps.length - 1)} className="font-semibold text-sm">
-                Quay lại chỉnh sửa
-              </Button>
-              <Button variant="gradient" size="lg" onClick={handleGenerate} className="gap-2 font-bold px-8">
-                <Sparkles className="w-4 h-4" />
-                Tạo AI Roadmap
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  // ---- BƯỚC 1-4: Thu thập thông tin ----
-  const step = inputSteps[currentStep];
-  const CurrentIcon = step.icon;
-
-  return (
-    <div className="max-w-2xl mx-auto py-6 md:py-10">
-      <div className="text-center space-y-2 mb-8">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground">
-          Tạo <span className="text-gradient">AI Roadmap</span>
-        </h1>
-        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-          Nhập thông tin chiến lược — AI sẽ đề xuất bộ máy và xây dựng roadmap chi tiết.
-        </p>
-      </div>
-
-      <div className="max-w-lg mx-auto">
-        {/* Progress */}
-        <div className="flex items-center gap-1.5 mb-6">
-          {Array.from({ length: TOTAL_STEPS }).map((_, index) => (
-            <div key={index} className="flex items-center flex-1">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 shrink-0 ${
-                index < currentStep ? "bg-primary text-primary-foreground shadow-md"
-                  : index === currentStep ? "bg-primary text-primary-foreground shadow-[0_0_12px_rgba(59,130,246,0.35)] ring-3 ring-primary/20"
-                  : "bg-secondary text-muted-foreground border border-border"
-              }`}>
-                {index < currentStep ? <Check className="w-3.5 h-3.5" /> : 
-                 index === TOTAL_STEPS - 1 ? <Sparkles className="w-3 h-3" /> : index + 1}
-              </div>
-              {index < TOTAL_STEPS - 1 && (
-                <div className={`flex-1 h-0.5 mx-1 rounded-full transition-all duration-300 ${
-                  index < currentStep ? "bg-primary" : "bg-border"
-                }`} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        <Card className="glass-card overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentStep}
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -16 }}
-              transition={{ duration: 0.15 }}
-            >
-              <CardContent className="p-5 md:p-7 space-y-5">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-sm">
-                    <CurrentIcon className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-base md:text-lg font-bold text-foreground">{step.title}</h2>
-                    <p className="text-xs text-muted-foreground font-medium">{step.description}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  {step.type === 'select' ? (
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">{step.label}</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {step.options?.map((opt) => (
-                          <button key={opt}
-                            onClick={() => setFormData(prev => ({ ...prev, [step.field]: opt }))}
-                            className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                              formData[step.field] === opt
-                                ? 'bg-primary text-white border-primary shadow-md'
-                                : 'bg-background border-border text-foreground hover:border-primary/40'
-                            }`}
-                          >{opt}</button>
-                        ))}
+              {/* Company KPIs */}
+              <Card className="glass-card">
+                <CardContent className="p-4 space-y-2">
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">KPIs Công ty</h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ceo.companyKPIs.map((kpi, ki) => (
+                      <div key={ki} className="inline-flex items-center gap-1 bg-primary/5 border border-primary/10 rounded-full px-2.5 py-1">
+                        <input
+                          value={kpi}
+                          onChange={(e) => {
+                            updateCEO(c => {
+                              const kpis = [...c.companyKPIs]
+                              kpis[ki] = e.target.value
+                              return { ...c, companyKPIs: kpis }
+                            })
+                          }}
+                          className="bg-transparent text-xs font-medium text-primary border-none outline-none w-auto min-w-[60px]"
+                          style={{ width: `${Math.max(60, (ceo.companyKPIs[ki]?.length || 6) * 7)}px` }}
+                        />
+                        <Edit3 className="w-2.5 h-2.5 text-primary/40" />
                       </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{step.label}</label>
-                      <Input autoFocus type={step.type} placeholder={step.placeholder}
-                        value={formData[step.field] || ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, [step.field]: e.target.value }))}
-                        onKeyDown={(e) => { if (e.key === "Enter" && isCurrentValid()) handleNext() }}
-                        className="h-12 text-base font-medium shadow-inner bg-background/50"
-                      />
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
-                  {/* Extra field (doanh thu trong bước Mục tiêu) */}
-                  {step.extraField && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{step.extraField.label}</label>
-                      <Input type={step.extraField.type} placeholder={step.extraField.placeholder}
-                        value={formData[step.extraField.field] || ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, [step.extraField!.field]: e.target.value }))}
-                        onKeyDown={(e) => { if (e.key === "Enter" && isCurrentValid()) handleNext() }}
-                        className="h-12 text-base font-medium shadow-inner bg-background/50"
-                      />
-                    </div>
-                  )}
+          {/* ============ HR TAB ============ */}
+          {activeTab === "hr" && (
+            <div className="space-y-4">
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Tổng nhân sự", value: `${hr.totalHeadcount} người`, icon: Users, color: "text-blue-600" },
+                  { label: "Quỹ lương / tháng", value: formatVND(hr.monthlySalary), icon: Wallet, color: "text-emerald-600" },
+                  { label: "Chi phí cố định / tháng", value: formatVND(hr.monthlyFixedCost), icon: DollarSign, color: "text-amber-600" },
+                  { label: "Biên lợi nhuận", value: `${hr.profitMargin}%`, icon: TrendingUp, color: "text-violet-600" },
+                ].map((item) => (
+                  <Card key={item.label} className="glass-card">
+                    <CardContent className="p-3 space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <item.icon className={`w-3.5 h-3.5 ${item.color}`} />
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{item.label}</span>
+                      </div>
+                      <p className="text-base font-bold text-foreground">{item.value}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Department cards */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5" /> Phòng ban & Nhân sự
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {hr.departments.map((dept, idx) => (
+                    <Card key={idx} className="glass-card hover:border-primary/20 transition-colors overflow-hidden">
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-start justify-between">
+                          <h4 className="font-bold text-sm text-foreground">{dept.name}</h4>
+                          <span className="text-xs font-semibold text-primary">{formatVND(dept.totalSalary)}/th</span>
+                        </div>
+                        {/* Key roles as badges */}
+                        <div className="flex flex-wrap gap-1">
+                          {dept.keyRoles.map((role, i) => (
+                            <span key={i} className="text-[10px] font-medium bg-primary/5 text-primary px-2 py-0.5 rounded-full border border-primary/10">
+                              {role}
+                            </span>
+                          ))}
+                        </div>
+                        {/* Editable headcount & salary */}
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50">
+                          <div>
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">Số người</label>
+                            <Input
+                              type="number" value={dept.headcount}
+                              onChange={(e) => handleDeptChange(idx, "headcount", parseInt(e.target.value) || 1)}
+                              className="h-8 text-xs mt-0.5"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase">Lương TB (VNĐ)</label>
+                            <Input
+                              type="number" value={dept.avgSalary}
+                              onChange={(e) => handleDeptChange(idx, "avgSalary", parseInt(e.target.value) || 0)}
+                              className="h-8 text-xs mt-0.5"
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
+              </div>
 
-                <div className="flex justify-between items-center pt-3">
-                  <Button variant="ghost" onClick={prevStep} disabled={isFirstStep} className={isFirstStep ? "invisible" : "font-semibold text-sm"}>
-                    Quay lại
-                  </Button>
-                  <Button onClick={handleNext} className="gap-2 font-bold px-6" disabled={!isCurrentValid()}>
-                    {currentStep === inputSteps.length - 1 ? (
-                      <><Sparkles className="w-4 h-4" /> AI phân tích</>
-                    ) : (
-                      <>Tiếp tục <ArrowRight className="w-4 h-4" /></>
-                    )}
-                  </Button>
-                </div>
+              {/* Hiring Plan Table */}
+              <Card className="glass-card">
+                <CardContent className="p-4 space-y-2">
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <UserPlus className="w-3.5 h-3.5" /> Kế hoạch Tuyển dụng
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 font-bold text-muted-foreground">Quý</th>
+                          <th className="text-left py-2 font-bold text-muted-foreground">Tuyển mới</th>
+                          <th className="text-left py-2 font-bold text-muted-foreground">Phòng ban</th>
+                          <th className="text-left py-2 font-bold text-muted-foreground">Ưu tiên</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hr.hiringPlan.map((item, i) => (
+                          <tr key={i} className="border-b border-border/50">
+                            <td className="py-2 font-semibold text-foreground">Q{item.quarter}</td>
+                            <td className="py-2 text-foreground">{item.newHires} người</td>
+                            <td className="py-2 text-foreground">{item.departments.join(", ")}</td>
+                            <td className="py-2">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                item.priority === "Cao" || item.priority === "High"
+                                  ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                                  : item.priority === "Trung bình" || item.priority === "Medium"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                              }`}>
+                                {item.priority}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
 
-                <p className="text-center text-[10px] text-muted-foreground font-medium">
-                  Bước {currentStep + 1} / {TOTAL_STEPS}
-                </p>
-              </CardContent>
-            </motion.div>
-          </AnimatePresence>
-        </Card>
+              {/* Compensation & KPI Bonus policies */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Card className="glass-card">
+                  <CardContent className="p-4 space-y-2">
+                    <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <BadgePercent className="w-3.5 h-3.5" /> Chính sách Lương thưởng
+                    </h3>
+                    <textarea
+                      value={hr.compensationPolicy}
+                      onChange={(e) => updateHR(h => ({ ...h, compensationPolicy: e.target.value }))}
+                      className="w-full min-h-[100px] text-xs text-foreground bg-muted/30 rounded-xl border border-border p-3 resize-y focus:ring-2 focus:ring-primary focus:outline-none"
+                    />
+                  </CardContent>
+                </Card>
+                <Card className="glass-card">
+                  <CardContent className="p-4 space-y-2">
+                    <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5" /> Chính sách KPI & Thưởng
+                    </h3>
+                    <textarea
+                      value={hr.kpiBonusPolicy}
+                      onChange={(e) => updateHR(h => ({ ...h, kpiBonusPolicy: e.target.value }))}
+                      className="w-full min-h-[100px] text-xs text-foreground bg-muted/30 rounded-xl border border-border p-3 resize-y focus:ring-2 focus:ring-primary focus:outline-none"
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Bottom Actions */}
+      <div className="flex items-center justify-between pt-4 border-t border-border">
+        <Button variant="ghost" onClick={() => { setScreen("input"); setBoard(null) }} className="gap-2 font-semibold text-sm">
+          <ArrowLeft className="w-4 h-4" /> Nhập lại thông tin
+        </Button>
+        <Button variant="gradient" size="lg" onClick={handleApprove} className="gap-2 font-bold px-8">
+          <Check className="w-4 h-4" />
+          Phê duyệt & Tạo Roadmap
+          <ArrowRight className="w-4 h-4" />
+        </Button>
       </div>
     </div>
   )
