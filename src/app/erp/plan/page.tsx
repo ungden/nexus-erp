@@ -63,28 +63,22 @@ function CashflowHealth({ revenue, expense }: { revenue: number; expense: number
   const isWarning = margin >= 0 && margin < 10
   return (
     <div className={`rounded-xl border p-4 flex items-center gap-3 text-sm ${
-      isHealthy ? "bg-emerald-50/80 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
-        : isWarning ? "bg-amber-50/80 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800"
-        : "bg-red-50/80 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+      isHealthy ? "bg-white border-emerald-300"
+        : isWarning ? "bg-white border-amber-300"
+        : "bg-white border-red-300"
     }`}>
       {isHealthy ? <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
         : isWarning ? <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
         : <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
       <div className="flex-1 min-w-0">
         <p className={`font-bold text-xs ${
-          isHealthy ? "text-emerald-800 dark:text-emerald-400"
-            : isWarning ? "text-amber-800 dark:text-amber-400"
-            : "text-red-800 dark:text-red-400"
+          isHealthy ? "text-emerald-700" : isWarning ? "text-amber-700" : "text-red-700"
         }`}>
           {isHealthy ? "Dòng tiền KHOẺ" : isWarning ? "Dòng tiền CẦN LƯU Ý" : "Dòng tiền NGUY HIỂM"}
           {" · "}Biên lợi nhuận {margin.toFixed(1)}%
         </p>
-        <p className={`text-[11px] ${
-          isHealthy ? "text-emerald-800/70 dark:text-emerald-500"
-            : isWarning ? "text-amber-800/70 dark:text-amber-500"
-            : "text-red-800/70 dark:text-red-500"
-        }`}>
-          Doanh thu {formatVND(revenue)} − Chi phí {formatVND(expense)} = <strong>{formatVND(revenue - expense)}</strong>
+        <p className="text-[11px] text-zinc-600">
+          Doanh thu {formatVND(revenue)} − Chi phí {formatVND(expense)} = <strong className="text-zinc-900">{formatVND(revenue - expense)}</strong>
         </p>
       </div>
     </div>
@@ -154,32 +148,40 @@ export default function PlanWizardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
       })
+
+      if (!res.ok) throw new Error("API failed")
       const data = await res.json()
 
-      // Wait until at least step 3 visible
-      await new Promise(r => setTimeout(r, 3200))
+      if (!data.board || !data.tree) throw new Error("Invalid response")
+
+      // Ensure all 3 animation steps finish visually
+      setLoadStep(3)
+      await new Promise(r => setTimeout(r, 800))
 
       setBoard(data.board)
       setTree(data.tree)
       setGeneratedAt(data.generatedAt)
 
       // Update finance context with CFO allocations
-      if (data.board?.cfo) {
+      try {
         const cfo = data.board.cfo as CFOAnalysis
-        setFinance({
-          targetRevenue: revenueNum,
-          allocations: {
-            cogs: cfo.budgetAllocation.cogs.percent,
-            hr: cfo.budgetAllocation.hr.percent,
-            mkt: cfo.budgetAllocation.marketing.percent,
-            ops: cfo.budgetAllocation.operations.percent,
-            profit: cfo.budgetAllocation.profit.percent,
-          },
-        })
-      }
+        if (cfo?.budgetAllocation) {
+          setFinance({
+            targetRevenue: revenueNum,
+            allocations: {
+              cogs: cfo.budgetAllocation.cogs.percent,
+              hr: cfo.budgetAllocation.hr.percent,
+              mkt: cfo.budgetAllocation.marketing.percent,
+              ops: cfo.budgetAllocation.operations.percent,
+              profit: cfo.budgetAllocation.profit.percent,
+            },
+          })
+        }
+      } catch { /* ignore finance sync errors */ }
 
       setScreen("results")
-    } catch {
+    } catch (err) {
+      console.error("Roadmap generation failed:", err)
       setScreen("input")
     } finally {
       clearTimeout(t1)
@@ -429,26 +431,30 @@ export default function PlanWizardPage() {
               <motion.div
                 key={i}
                 initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: loadStep >= i ? 1 : 0.3, y: 0 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.15, duration: 0.3 }}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+                className={`flex items-center gap-3 px-5 py-4 rounded-xl border ${
                   loadStep > i
-                    ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800"
+                    ? "bg-white border-emerald-300"
                     : loadStep === i
-                    ? "bg-primary/5 border-primary/20"
-                    : "bg-muted/30 border-border"
+                    ? "bg-white border-primary/40 shadow-sm"
+                    : "bg-white border-zinc-200"
                 }`}
               >
                 <span className="text-lg">{s.emoji}</span>
-                <span className={`flex-1 text-left ${loadStep >= i ? "text-foreground" : "text-muted-foreground/50"}`}>
+                <span className={`flex-1 text-left ${
+                  loadStep > i ? "text-zinc-900 font-semibold" 
+                  : loadStep === i ? "text-zinc-800" 
+                  : "text-zinc-400"
+                }`}>
                   {s.text}
                 </span>
                 {loadStep > i ? (
-                  <Check className="w-5 h-5 text-emerald-500 shrink-0" />
+                  <Check className="w-5 h-5 text-emerald-600 shrink-0" />
                 ) : loadStep === i ? (
                   <span className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0 inline-block" />
                 ) : (
-                  <span className="w-5 h-5 rounded-full border-2 border-border shrink-0 inline-block" />
+                  <span className="w-5 h-5 rounded-full border-2 border-zinc-300 shrink-0 inline-block" />
                 )}
               </motion.div>
             ))}
@@ -461,7 +467,15 @@ export default function PlanWizardPage() {
   // ==========================================================
   // SCREEN 3: Board Results — 3 Editable Tabs
   // ==========================================================
-  if (!board) return null
+  if (!board) return (
+    <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 text-center px-4">
+      <p className="text-lg font-semibold text-foreground">Không có dữ liệu phân tích</p>
+      <p className="text-sm text-muted-foreground">Vui lòng tạo kế hoạch mới.</p>
+      <Button onClick={() => setScreen("input")} className="gap-2">
+        <ArrowRight className="w-4 h-4 rotate-180" /> Quay lại nhập liệu
+      </Button>
+    </div>
+  )
 
   const cfo = board.cfo
   const ceo = board.ceo
