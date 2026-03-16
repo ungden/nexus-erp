@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
-import { useCallback } from "react"
-import { useSearchParams } from "next/navigation"
+import { useCallback, useMemo } from "react"
 import {
   ReactFlow,
   MiniMap,
@@ -18,66 +17,131 @@ import {
 import "@xyflow/react/dist/style.css"
 import { GlassNode } from "./GlassNode"
 import { Button } from "../ui/Button"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, MapPin } from "lucide-react"
 import Link from "next/link"
+import { useAppContext } from "@/context/AppContext"
+import { RoadmapNode } from "@/lib/roadmap-types"
 
 const nodeTypes: NodeTypes = {
   glass: GlassNode,
 }
 
-export function MindmapView() {
-  const searchParams = useSearchParams()
-  const company = searchParams.get("company") || "Doanh nghiệp của bạn"
-  const revenueStr = searchParams.get("revenue") || "1000000000"
-  const revenue = parseInt(revenueStr, 10)
+const TYPE_COLORS: Record<string, string> = {
+  company: "#3b82f6",
+  sales: "#3b82f6",
+  marketing: "#8b5cf6",
+  product: "#10b981",
+  admin: "#f59e0b",
+}
 
-  const salesBudget = Math.round(revenue * 0.4)
-  const marketingBudget = Math.round(revenue * 0.3)
-  const productBudget = Math.round(revenue * 0.2)
-  const adminBudget = Math.round(revenue * 0.1)
+function departmentToType(dept?: string): string {
+  if (!dept) return "company"
+  const lower = dept.toLowerCase()
+  if (lower.includes("kinh doanh") || lower.includes("sales")) return "sales"
+  if (lower.includes("marketing")) return "marketing"
+  if (lower.includes("kỹ thuật") || lower.includes("sản phẩm") || lower.includes("it")) return "product"
+  if (lower.includes("vận hành") || lower.includes("nhân sự") || lower.includes("hành chính")) return "admin"
+  return "company"
+}
 
-  const initialNodes = [
-    {
-      id: "master", type: "glass", position: { x: 400, y: 0 },
-      data: { label: company, description: "Mục tiêu Doanh thu Tổng", budget: revenue, type: "company", kpi: "Đạt mục tiêu doanh thu năm" },
-      style: { zIndex: 10 }
-    },
-    {
-      id: "sales", type: "glass", position: { x: 0, y: 220 },
-      data: { label: "Kinh doanh & Doanh thu", description: "Bộ máy Doanh thu", budget: salesBudget, type: "sales", headcount: Math.max(1, Math.round(salesBudget / 20000000)), kpi: "Chốt 20 hợp đồng lớn" },
-    },
-    {
-      id: "marketing", type: "glass", position: { x: 300, y: 220 },
-      data: { label: "Marketing", description: "Tạo nhu cầu & Lead", budget: marketingBudget, type: "marketing", headcount: Math.max(1, Math.round(marketingBudget / 18000000)), kpi: "Tạo 500 lead chất lượng" },
-    },
-    {
-      id: "product", type: "glass", position: { x: 600, y: 220 },
-      data: { label: "Sản phẩm & Kỹ thuật", description: "Nền tảng Công nghệ", budget: productBudget, type: "product", headcount: Math.max(1, Math.round(productBudget / 25000000)), kpi: "Ra mắt tính năng V2" },
-    },
-    {
-      id: "admin", type: "glass", position: { x: 900, y: 220 },
-      data: { label: "Hành chính & Vận hành", description: "Vận hành nội bộ", budget: adminBudget, type: "admin", headcount: Math.max(1, Math.round(adminBudget / 15000000)), kpi: "Giảm chi phí 15%" },
-    },
-    {
-      id: "sales-sdr", type: "glass", position: { x: -80, y: 460 },
-      data: { label: "Đội Tìm kiếm KH", description: "Tiếp cận Khách hàng mới", budget: Math.round(salesBudget * 0.3), type: "sales", kpi: "Đạt 100 cuộc hẹn" },
-    },
-    {
-      id: "sales-ae", type: "glass", position: { x: 200, y: 460 },
-      data: { label: "Đội Chốt Deal", description: "Đàm phán & Ký hợp đồng", budget: Math.round(salesBudget * 0.7), type: "sales", kpi: "Tỷ lệ chốt > 20%" },
-    },
-  ]
-
+function buildNodesAndEdges(tree: RoadmapNode, companyName: string) {
+  const nodes: any[] = []
+  const edges: Edge[] = []
   const edgeStyle = (color: string) => ({ stroke: color, strokeWidth: 2 })
 
-  const initialEdges: Edge[] = [
-    { id: "e-master-sales", source: "master", target: "sales", animated: true, style: { ...edgeStyle("#3b82f6"), opacity: 0.8 } },
-    { id: "e-master-marketing", source: "master", target: "marketing", animated: true, style: { ...edgeStyle("#8b5cf6"), opacity: 0.8 } },
-    { id: "e-master-product", source: "master", target: "product", animated: true, style: { ...edgeStyle("#10b981"), opacity: 0.8 } },
-    { id: "e-master-admin", source: "master", target: "admin", animated: true, style: { ...edgeStyle("#f59e0b"), opacity: 0.8 } },
-    { id: "e-sales-sdr", source: "sales", target: "sales-sdr", type: "smoothstep", style: { ...edgeStyle("#3b82f6"), opacity: 0.4 } },
-    { id: "e-sales-ae", source: "sales", target: "sales-ae", type: "smoothstep", style: { ...edgeStyle("#3b82f6"), opacity: 0.4 } },
-  ]
+  // Root node
+  nodes.push({
+    id: tree.id,
+    type: "glass",
+    position: { x: 400, y: 0 },
+    data: {
+      label: companyName,
+      description: tree.description || "Mục tiêu Doanh thu Tổng",
+      budget: tree.revenue,
+      type: "company",
+      kpi: tree.kpis?.[0] || "Đạt mục tiêu doanh thu năm",
+    },
+    style: { zIndex: 10 },
+  })
+
+  // Children (quarters/departments)
+  if (tree.children && tree.children.length > 0) {
+    const childCount = tree.children.length
+    const spacing = 300
+    const startX = 400 - ((childCount - 1) * spacing) / 2
+
+    tree.children.forEach((child, i) => {
+      const nodeType = departmentToType(child.department)
+      const color = TYPE_COLORS[nodeType] || "#3b82f6"
+
+      nodes.push({
+        id: child.id,
+        type: "glass",
+        position: { x: startX + i * spacing, y: 220 },
+        data: {
+          label: child.title,
+          description: child.description,
+          budget: child.revenue,
+          type: nodeType,
+          kpi: child.kpis?.[0] || "",
+        },
+      })
+
+      edges.push({
+        id: `e-${tree.id}-${child.id}`,
+        source: tree.id,
+        target: child.id,
+        animated: true,
+        style: { ...edgeStyle(color), opacity: 0.8 },
+      })
+
+      // Grandchildren (months/weeks if expanded)
+      if (child.children && child.children.length > 0) {
+        const gcSpacing = 260
+        const gcStartX = (startX + i * spacing) - ((child.children.length - 1) * gcSpacing) / 2
+
+        child.children.forEach((gc, j) => {
+          const gcType = departmentToType(gc.department)
+          const gcColor = TYPE_COLORS[gcType] || "#3b82f6"
+
+          nodes.push({
+            id: gc.id,
+            type: "glass",
+            position: { x: gcStartX + j * gcSpacing, y: 460 },
+            data: {
+              label: gc.title,
+              description: gc.description,
+              budget: gc.revenue,
+              type: gcType,
+              kpi: gc.kpis?.[0] || "",
+            },
+          })
+
+          edges.push({
+            id: `e-${child.id}-${gc.id}`,
+            source: child.id,
+            target: gc.id,
+            type: "smoothstep",
+            style: { ...edgeStyle(gcColor), opacity: 0.4 },
+          })
+        })
+      }
+    })
+  }
+
+  return { nodes, edges }
+}
+
+export function MindmapView() {
+  const { roadmap } = useAppContext()
+
+  const { initialNodes, initialEdges } = useMemo(() => {
+    if (!roadmap) {
+      return { initialNodes: [], initialEdges: [] }
+    }
+    const { nodes, edges } = buildNodesAndEdges(roadmap.tree, roadmap.company.companyName)
+    return { initialNodes: nodes, initialEdges: edges }
+  }, [roadmap])
 
   const [nodes, , onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
@@ -87,10 +151,30 @@ export function MindmapView() {
     [setEdges]
   )
 
+  // Fallback: No roadmap data
+  if (!roadmap) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+        <div className="text-center space-y-3">
+          <MapPin className="w-12 h-12 text-muted-foreground/40 mx-auto" />
+          <h2 className="text-xl font-bold text-foreground">Chưa có dữ liệu Roadmap</h2>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Hãy tạo AI Roadmap trước để xem sơ đồ tư duy. Roadmap sẽ được hiển thị dạng cây phân cấp trực quan.
+          </p>
+        </div>
+        <Link href="/erp/plan">
+          <Button className="gap-2 font-semibold">
+            <MapPin className="w-4 h-4" /> Tạo AI Roadmap
+          </Button>
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <div className="w-full relative flex flex-col -m-4 sm:-m-6 lg:-m-8" style={{ height: "calc(100vh - 64px)" }}>
       <div className="absolute top-4 left-4 md:left-6 z-50">
-        <Link href={`/erp/plan/view?company=${encodeURIComponent(company)}&revenue=${revenue}&objective=${encodeURIComponent(searchParams.get("objective") || "")}`}>
+        <Link href="/erp/plan/view">
           <Button variant="outline" size="sm" className="gap-2 bg-card/90 backdrop-blur-xl shadow-lg border-border font-bold">
             <ArrowLeft className="w-4 h-4" /> Quay lại Kế hoạch
           </Button>

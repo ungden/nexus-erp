@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Target, TrendingUp, Award, BarChart3, ChevronRight, X, Trash2 } from 'lucide-react';
 import { useAppContext, KPI as AppKPI, KpiStatus } from '@/context/AppContext';
+import { formatVND } from '@/lib/format';
 
 export default function KPI() {
   const { kpis, setKpis } = useAppContext();
@@ -40,16 +41,6 @@ export default function KPI() {
 
   const completedCount = kpis.filter(k => k.progress >= 100).length;
   const inProgressCount = kpis.filter(k => k.progress < 100).length;
-
-  const formatValue = (value: number, title: string) => {
-    if (title.toLowerCase().includes('doanh thu') || title.toLowerCase().includes('chi phí')) {
-      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-    }
-    if (title.toLowerCase().includes('tỷ lệ') || title.toLowerCase().includes('giảm')) {
-      return `${value}%`;
-    }
-    return value.toString();
-  };
 
   return (
     <div className="space-y-6 relative">
@@ -127,8 +118,8 @@ export default function KPI() {
               </div>
               
               <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
-                <span>Đạt được: <strong className="text-foreground">{formatValue(kpi.current, kpi.title)}</strong></span>
-                <span>Mục tiêu: <strong className="text-foreground">{formatValue(kpi.target, kpi.title)}</strong></span>
+                <span>Đạt được: <strong className="text-foreground">{formatVND(kpi.current, 'full')}</strong></span>
+                <span>Mục tiêu: <strong className="text-foreground">{formatVND(kpi.target, 'full')}</strong></span>
               </div>
               
               <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden">

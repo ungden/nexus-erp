@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Search, Plus, Mail, X, Wallet, TrendingUp, AlertCircle, ChevronRight, ChevronDown } from 'lucide-react';
 import { useAppContext, Employee } from '@/context/AppContext';
+import { formatVND } from '@/lib/format';
 
 const OrgNode = ({ employee, allEmployees, level = 0 }: { employee: Employee, allEmployees: Employee[], level?: number }) => {
   const [expanded, setExpanded] = useState(true);
@@ -84,10 +85,6 @@ export default function HRM() {
     );
   }, [employees, searchQuery]);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-  };
-
   const handleAddEmployee = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmployee.name || !newEmployee.email || !newEmployee.baseSalary) return;
@@ -162,8 +159,8 @@ export default function HRM() {
             <h3 className="text-sm font-medium text-primary">Ngân sách Nhân sự (Từ Finance)</h3>
             <Wallet className="w-5 h-5 text-primary" />
           </div>
-          <p className="mt-2 text-2xl font-bold text-primary">{formatCurrency(hrBudget)}</p>
-          <p className="mt-1 text-xs text-primary/90">{finance.allocations.hr}% Mục tiêu Doanh thu ({formatCurrency(finance.targetRevenue)})</p>
+          <p className="mt-2 text-2xl font-bold text-primary">{formatVND(hrBudget, 'full')}</p>
+          <p className="mt-1 text-xs text-primary/90">{finance.allocations.hr}% Mục tiêu Doanh thu ({formatVND(finance.targetRevenue, 'full')})</p>
         </div>
         
         <div className="glass-card p-5">
@@ -171,7 +168,7 @@ export default function HRM() {
             <h3 className="text-sm font-medium text-muted-foreground">Quỹ lương cơ bản hiện tại</h3>
             <TrendingUp className="w-5 h-5 text-muted-foreground/70" />
           </div>
-          <p className="mt-2 text-2xl font-bold text-foreground">{formatCurrency(currentPayroll)}</p>
+          <p className="mt-2 text-2xl font-bold text-foreground">{formatVND(currentPayroll, 'full')}</p>
           <p className="mt-1 text-xs text-muted-foreground">Tổng lương cơ bản của {employees.length} nhân sự</p>
         </div>
 
@@ -183,7 +180,7 @@ export default function HRM() {
             <AlertCircle className={`w-5 h-5 ${remainingBudget >= 0 ? 'text-green-600' : 'text-red-600'}`} />
           </div>
           <p className={`mt-2 text-2xl font-bold ${remainingBudget >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-            {formatCurrency(remainingBudget)}
+            {formatVND(remainingBudget, 'full')}
           </p>
           <p className={`mt-1 text-xs ${remainingBudget >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {remainingBudget >= 0 ? 'Đủ ngân sách để tuyển thêm nhân sự' : 'Cảnh báo: Vượt ngân sách nhân sự'}
@@ -253,7 +250,7 @@ export default function HRM() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground font-medium text-right">
-                      {formatCurrency(person.baseSalary)}
+                      {formatVND(person.baseSalary, 'full')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button onClick={() => deleteEmployee(person.id)} className="text-red-600 hover:text-red-900 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -7,6 +7,7 @@ import { CashflowBar } from "./CashflowBar"
 import { GitBranchPlus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import Link from "next/link"
+import { useAppContext } from "@/context/AppContext"
 
 interface Props {
   roadmap: Roadmap;
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function RoadmapTree({ roadmap, onUpdate }: Props) {
+  const { employees } = useAppContext();
   const tree = roadmap.tree;
 
   // Recursive function to find and update a node in the tree
@@ -52,7 +54,7 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
       const res = await fetch('/api/roadmap/expand', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ node, profile: roadmap.company }),
+        body: JSON.stringify({ node, profile: roadmap.company, employees }),
       });
       const data = await res.json();
       

@@ -3,7 +3,7 @@
 // Năm → Quý → Tháng → Tuần → Task
 // ============================================================
 
-export type RoadmapLevel = 'year' | 'quarter' | 'month' | 'week' | 'task';
+export type RoadmapLevel = 'year' | 'quarter' | 'month' | 'week' | 'day' | 'task';
 export type CashflowStatus = 'healthy' | 'warning' | 'danger';
 
 export interface RoadmapNode {
@@ -17,6 +17,10 @@ export interface RoadmapNode {
   cashflow: number;
   cashflowStatus: CashflowStatus;
   kpis: string[];
+  assigneeId?: number;
+  assigneeName?: string;
+  startDate?: string;
+  endDate?: string;
   children?: RoadmapNode[];
   isExpanded?: boolean;
   isLoading?: boolean;
@@ -50,6 +54,7 @@ export const LEVEL_LABELS: Record<RoadmapLevel, string> = {
   quarter: 'Quý',
   month: 'Tháng',
   week: 'Tuần',
+  day: 'Ngày',
   task: 'Công việc',
 };
 
@@ -58,5 +63,6 @@ export const LEVEL_ICONS: Record<RoadmapLevel, string> = {
   quarter: '📅',
   month: '📆',
   week: '📋',
+  day: '📌',
   task: '☑',
 };

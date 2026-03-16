@@ -14,6 +14,7 @@ import { useWizard } from "@/components/wizard/useWizard"
 import { useAppContext } from "@/context/AppContext"
 import { CompanyProfile } from "@/lib/roadmap-types"
 import { CompanySuggestion, DepartmentSuggestion } from "@/lib/ai-suggest"
+import { formatVND } from '@/lib/format'
 
 const INDUSTRIES = [
   'Công nghệ', 'Bán lẻ', 'Dịch vụ', 'Sản xuất', 'F&B',
@@ -54,12 +55,6 @@ const inputSteps = [
 ];
 
 const TOTAL_STEPS = inputSteps.length + 1; // +1 cho bước AI suggest
-
-function formatVND(val: number): string {
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)} tỷ`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(0)} triệu`;
-  return new Intl.NumberFormat('vi-VN').format(val) + 'đ';
-}
 
 export default function PlanWizardPage() {
   const router = useRouter()

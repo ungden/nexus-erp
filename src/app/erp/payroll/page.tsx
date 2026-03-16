@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Download, Eye, Calculator, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { useAppContext, PayrollRecord } from '@/context/AppContext';
+import { formatVND } from '@/lib/format';
 
 export default function Payroll() {
   const { payrolls, setPayrolls, employees } = useAppContext();
@@ -14,10 +15,6 @@ export default function Payroll() {
     if (selectedPayslip && selectedPayslip.id === id) {
       setSelectedPayslip({ ...selectedPayslip, status: 'Đã duyệt' });
     }
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
   };
 
   const getEmployeeInfo = (employeeId: number) => {
@@ -120,11 +117,11 @@ export default function Payroll() {
                     <div className="text-sm font-medium text-foreground">{empInfo.name}</div>
                     <div className="text-sm text-muted-foreground">{empInfo.department}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground text-right">{formatCurrency(row.base)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium text-right">+{formatCurrency(row.commission)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium text-right">+{formatCurrency(row.kpiBonus)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium text-right">-{formatCurrency(row.deduction)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-foreground text-right">{formatCurrency(row.total)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground text-right">{formatVND(row.base, 'full')}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium text-right">+{formatVND(row.commission, 'full')}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium text-right">+{formatVND(row.kpiBonus, 'full')}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium text-right">-{formatVND(row.deduction, 'full')}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-foreground text-right">{formatVND(row.total, 'full')}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     {row.status === 'Đã duyệt' ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -168,23 +165,23 @@ export default function Payroll() {
             <div className="space-y-4 mb-6">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Lương cơ bản:</span>
-                <span className="font-medium">{formatCurrency(selectedPayslip.base)}</span>
+                <span className="font-medium">{formatVND(selectedPayslip.base, 'full')}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Hoa hồng (CRM):</span>
-                <span className="font-medium text-green-600">+{formatCurrency(selectedPayslip.commission)}</span>
+                <span className="font-medium text-green-600">+{formatVND(selectedPayslip.commission, 'full')}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Thưởng KPI:</span>
-                <span className="font-medium text-green-600">+{formatCurrency(selectedPayslip.kpiBonus)}</span>
+                <span className="font-medium text-green-600">+{formatVND(selectedPayslip.kpiBonus, 'full')}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Khấu trừ (Thuế, BH, Đi muộn):</span>
-                <span className="font-medium text-red-600">-{formatCurrency(selectedPayslip.deduction)}</span>
+                <span className="font-medium text-red-600">-{formatVND(selectedPayslip.deduction, 'full')}</span>
               </div>
               <div className="pt-4 border-t border-border flex justify-between items-center">
                 <span className="font-bold text-foreground">Thực nhận:</span>
-                <span className="text-xl font-bold text-primary">{formatCurrency(selectedPayslip.total)}</span>
+                <span className="text-xl font-bold text-primary">{formatVND(selectedPayslip.total, 'full')}</span>
               </div>
             </div>
 

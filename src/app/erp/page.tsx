@@ -11,7 +11,9 @@ import {
   Wallet,
   ArrowDownRight,
   Target,
-  ArrowUpRight
+  ArrowUpRight,
+  MapPin,
+  ChevronRight
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -26,8 +28,10 @@ import {
   Cell
 } from 'recharts';
 import { useAppContext } from '@/context/AppContext';
+import { formatVND } from '@/lib/format';
+import Link from 'next/link';
 
-const revenueData = [
+const defaultRevenueData = [
   { name: 'T1', actual: 400, target: 500 },
   { name: 'T2', actual: 600, target: 600 },
   { name: 'T3', actual: 800, target: 700 },
@@ -44,20 +48,10 @@ const fadeIn = {
 };
 
 export default function Dashboard() {
-  const { finance, setFinance, deals, employees, expenses } = useAppContext();
+  const { finance, setFinance, deals, employees, expenses, roadmap } = useAppContext();
   
   const targetRevenue = finance.targetRevenue;
   const allocations = finance.allocations;
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-  };
-
-  const formatShort = (value: number) => {
-    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)} tỷ`;
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(0)} tr`;
-    return formatCurrency(value);
-  };
 
   const handleAllocationChange = (key: keyof typeof allocations, value: number) => {
     setFinance(prev => ({
@@ -102,6 +96,30 @@ export default function Dashboard() {
 
   const actualProfit = actualRevenue - actualHRCost - actualMktCost - actualOpsCost - actualCogsCost;
 
+  // Derive revenue chart data from roadmap quarters if available
+  const revenueData = useMemo(() => {
+    if (roadmap?.tree?.children && roadmap.tree.children.length >= 4) {
+      const quarters = roadmap.tree.children;
+      // Expand 4 quarters into ~6 data points (Q1 → T1/T2, Q2 → T3/T4, Q3 → T5, Q4 → T6)
+      return [
+        { name: 'Q1a', actual: Math.round(quarters[0].revenue * 0.45 / 1000000), target: Math.round(quarters[0].revenue * 0.5 / 1000000) },
+        { name: 'Q1b', actual: Math.round(quarters[0].revenue * 0.55 / 1000000), target: Math.round(quarters[0].revenue * 0.5 / 1000000) },
+        { name: 'Q2a', actual: Math.round(quarters[1].revenue * 0.48 / 1000000), target: Math.round(quarters[1].revenue * 0.5 / 1000000) },
+        { name: 'Q2b', actual: Math.round(quarters[1].revenue * 0.52 / 1000000), target: Math.round(quarters[1].revenue * 0.5 / 1000000) },
+        { name: 'Q3', actual: Math.round(quarters[2].revenue * 0.9 / 1000000), target: Math.round(quarters[2].revenue / 1000000) },
+        { name: 'Q4', actual: Math.round(quarters[3].revenue * 0.85 / 1000000), target: Math.round(quarters[3].revenue / 1000000) },
+      ];
+    }
+    return defaultRevenueData;
+  }, [roadmap]);
+
+  // Get current quarter data from roadmap
+  const currentQuarter = useMemo(() => {
+    if (!roadmap?.tree?.children || roadmap.tree.children.length === 0) return null;
+    const currentQ = Math.ceil((new Date().getMonth() + 1) / 3) - 1; // 0-indexed
+    return roadmap.tree.children[Math.min(currentQ, roadmap.tree.children.length - 1)];
+  }, [roadmap]);
+
   const hrBudget = (targetRevenue * allocations.hr) / 100;
   const mktBudget = (targetRevenue * allocations.mkt) / 100;
   const profitTarget = (targetRevenue * allocations.profit) / 100;
@@ -127,7 +145,7 @@ export default function Dashboard() {
       iconColor: 'text-blue-600',
       iconBg: 'bg-blue-50',
       trend: actualHRCost <= hrBudget ? 'up' : 'down',
-      trendValue: actualHRCost <= hrBudget ? `Dư ${formatShort(hrBudget - actualHRCost)}` : `Vượt ${formatShort(actualHRCost - hrBudget)}`,
+      trendValue: actualHRCost <= hrBudget ? `Dư ${formatVND(hrBudget - actualHRCost)}` : `Vượt ${formatVND(actualHRCost - hrBudget)}`,
       trendPositive: actualHRCost <= hrBudget
     },
     { 
@@ -138,7 +156,7 @@ export default function Dashboard() {
       iconColor: 'text-amber-500',
       iconBg: 'bg-amber-50',
       trend: actualMktCost <= mktBudget ? 'up' : 'down',
-      trendValue: actualMktCost <= mktBudget ? `Dư ${formatShort(mktBudget - actualMktCost)}` : `Vượt ${formatShort(actualMktCost - mktBudget)}`,
+      trendValue: actualMktCost <= mktBudget ? `Dư ${formatVND(mktBudget - actualMktCost)}` : `Vượt ${formatVND(actualMktCost - mktBudget)}`,
       trendPositive: actualMktCost <= mktBudget
     },
     { 
@@ -149,7 +167,7 @@ export default function Dashboard() {
       iconColor: 'text-emerald-600',
       iconBg: 'bg-emerald-50',
       trend: actualProfit >= 0 ? 'up' : 'down',
-      trendValue: `Target: ${formatShort(profitTarget)}`,
+      trendValue: `Target: ${formatVND(profitTarget)}`,
       trendPositive: actualProfit >= profitTarget
     },
   ];
@@ -240,7 +258,7 @@ export default function Dashboard() {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-1">{item.name}</p>
-                    <p className="text-lg font-bold text-foreground">{formatCurrency(item.value)}</p>
+                    <p className="text-lg font-bold text-foreground">{formatVND(item.value, 'full')}</p>
                   </div>
                   <div className="p-2 bg-card rounded-md shadow-sm">
                     <ArrowDownRight className="w-4 h-4 text-muted-foreground/70" />
@@ -279,11 +297,97 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xs font-medium text-muted-foreground">{card.label}</p>
-            <p className="text-xl md:text-2xl font-bold text-foreground mt-1">{formatCurrency(card.value)}</p>
+            <p className="text-xl md:text-2xl font-bold text-foreground mt-1">{formatVND(card.value, 'full')}</p>
             <p className="text-[10px] text-muted-foreground mt-1">{card.sublabel}</p>
           </motion.div>
         ))}
       </div>
+
+      {/* Roadmap Quý hiện tại */}
+      {roadmap && currentQuarter ? (
+        <motion.div 
+          className="glass-card overflow-hidden"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+        >
+          <div className="bg-emerald-50 p-4 md:p-5 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base md:text-lg font-bold text-emerald-800 flex items-center gap-2">
+                <MapPin className="w-5 h-5" />
+                Roadmap Quý hiện tại
+              </h2>
+              <p className="text-xs text-emerald-600 mt-0.5">{currentQuarter.title} — {currentQuarter.description}</p>
+            </div>
+            <Link href="/erp/plan/view">
+              <button className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg text-emerald-700 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 transition-colors">
+                Xem chi tiết Roadmap <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </Link>
+          </div>
+          <div className="p-4 md:p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div className="bg-muted/30 rounded-xl p-4 border border-border">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Mục tiêu Doanh thu</p>
+                <p className="text-lg font-bold text-foreground">{formatVND(currentQuarter.revenue, 'full')}</p>
+              </div>
+              <div className="bg-muted/30 rounded-xl p-4 border border-border">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Ngân sách Chi phí</p>
+                <p className="text-lg font-bold text-foreground">{formatVND(currentQuarter.expense, 'full')}</p>
+              </div>
+              <div className="bg-muted/30 rounded-xl p-4 border border-border">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Dòng tiền</p>
+                <div className="flex items-center gap-2">
+                  <p className={`text-lg font-bold ${currentQuarter.cashflow >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {currentQuarter.cashflow >= 0 ? '+' : ''}{formatVND(currentQuarter.cashflow, 'full')}
+                  </p>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    currentQuarter.cashflowStatus === 'healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    currentQuarter.cashflowStatus === 'warning' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                    'bg-red-50 text-red-700 border-red-200'
+                  }`}>
+                    {currentQuarter.cashflowStatus === 'healthy' ? 'Khoẻ' : currentQuarter.cashflowStatus === 'warning' ? 'Lưu ý' : 'Nguy hiểm'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {currentQuarter.kpis && currentQuarter.kpis.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground mb-2">KPIs Quý</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {currentQuarter.kpis.map((kpi, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 text-[11px] font-medium bg-primary/5 text-primary border border-primary/10 px-2.5 py-1 rounded-full">
+                      {kpi}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div 
+          className="glass-card p-6 flex items-center justify-between"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+        >
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-primary/10 rounded-xl">
+              <MapPin className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-bold text-foreground">Tạo AI Roadmap để theo dõi kế hoạch</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Phân tích doanh thu, chi phí, KPI theo Quý/Tháng/Tuần/Ngày</p>
+            </div>
+          </div>
+          <Link href="/erp/plan">
+            <button className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg text-white bg-primary hover:bg-primary/90 transition-colors">
+              Tạo Roadmap <ChevronRight className="w-4 h-4" />
+            </button>
+          </Link>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Chart */}
@@ -341,7 +445,7 @@ export default function Dashboard() {
                     <div className="flex-shrink-0 p-2 bg-red-50 rounded-lg"><AlertCircle className="h-5 w-5 text-red-500" /></div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">Marketing vượt ngân sách</p>
-                      <p className="text-xs text-muted-foreground truncate">Chi phí thực tế vượt ngân sách phân bổ {formatCurrency(actualMktCost - mktBudget)}.</p>
+                      <p className="text-xs text-muted-foreground truncate">Chi phí thực tế vượt ngân sách phân bổ {formatVND(actualMktCost - mktBudget, 'full')}.</p>
                     </div>
                     <button className="inline-flex items-center px-2.5 py-1.5 border border-border text-xs font-medium rounded-lg text-foreground/90 bg-card hover:bg-muted/30">
                       Chi tiết
@@ -354,7 +458,7 @@ export default function Dashboard() {
                   <div className="flex-shrink-0 p-2 bg-primary/5 rounded-lg"><Clock className="h-5 w-5 text-primary/80" /></div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">Duyệt quỹ lương tháng này</p>
-                    <p className="text-xs text-muted-foreground truncate">Tổng quỹ lương: {formatCurrency(actualHRCost)} (Ngân sách: {formatCurrency(hrBudget)}).</p>
+                    <p className="text-xs text-muted-foreground truncate">Tổng quỹ lương: {formatVND(actualHRCost, 'full')} (Ngân sách: {formatVND(hrBudget, 'full')}).</p>
                   </div>
                   <button className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded-lg text-white bg-primary hover:bg-primary/90">
                     Duyệt chi
@@ -367,7 +471,7 @@ export default function Dashboard() {
                     <div className="flex-shrink-0 p-2 bg-emerald-50 rounded-lg"><Users className="h-5 w-5 text-emerald-500" /></div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">Ngân sách tuyển dụng (HR)</p>
-                      <p className="text-xs text-muted-foreground truncate">Ngân sách HR còn dư {formatCurrency(hrBudget - actualHRCost)}. Đủ điều kiện tuyển thêm.</p>
+                      <p className="text-xs text-muted-foreground truncate">Ngân sách HR còn dư {formatVND(hrBudget - actualHRCost, 'full')}. Đủ điều kiện tuyển thêm.</p>
                     </div>
                     <button className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded-lg text-white bg-primary hover:bg-primary/90">
                       Xem HR
@@ -398,7 +502,7 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: unknown) => formatCurrency(Number(value))}
+                    formatter={(value: unknown) => formatVND(Number(value), 'full')}
                     contentStyle={{ 
                       background: 'rgba(255,255,255,0.95)', 
                       border: '1px solid #e2e8f0', 

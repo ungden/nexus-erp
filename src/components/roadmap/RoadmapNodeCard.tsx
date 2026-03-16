@@ -1,20 +1,14 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronRight, ChevronDown, Loader2, TrendingUp, Wallet, DollarSign, Circle } from "lucide-react"
+import { ChevronRight, ChevronDown, Loader2, TrendingUp, Wallet, DollarSign, Circle, User } from "lucide-react"
 import { RoadmapNode, CashflowStatus, LEVEL_ICONS } from "@/lib/roadmap-types"
+import { formatVND } from '@/lib/format'
 
 const statusColors: Record<CashflowStatus, { dot: string; text: string; badge: string }> = {
   healthy: { dot: 'bg-emerald-500', text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   warning: { dot: 'bg-amber-500', text: 'text-amber-600', badge: 'bg-amber-50 text-amber-700 border-amber-200' },
   danger: { dot: 'bg-red-500', text: 'text-red-600', badge: 'bg-red-50 text-red-700 border-red-200' },
-}
-
-function formatVND(val: number): string {
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)} tỷ`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(0)} tr`;
-  if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`;
-  return new Intl.NumberFormat('vi-VN').format(val);
 }
 
 interface Props {
@@ -26,6 +20,7 @@ interface Props {
 export function RoadmapNodeCard({ node, depth, onExpand }: Props) {
   const colors = statusColors[node.cashflowStatus];
   const isTask = node.level === 'task';
+  const isDay = node.level === 'day';
   const canExpand = !isTask;
   const hasChildren = node.children && node.children.length > 0;
   const indent = depth * 1;
@@ -109,6 +104,23 @@ export function RoadmapNodeCard({ node, depth, onExpand }: Props) {
                 <div className="flex items-center gap-3 mt-1.5 text-[11px]">
                   <span className="text-emerald-600 font-semibold">+{formatVND(node.revenue)}</span>
                   <span className="text-red-400 font-medium">-{formatVND(node.expense)}</span>
+                </div>
+              )}
+
+              {/* Assignee display for task-level nodes */}
+              {isTask && node.assigneeName && (
+                <div className="flex items-center gap-1.5 mt-2 text-[11px]">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                    <User className="w-3 h-3" />
+                    {node.assigneeName}
+                  </span>
+                </div>
+              )}
+
+              {/* Day-level: show date range */}
+              {isDay && node.startDate && (
+                <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-muted-foreground">
+                  <span className="font-medium">{node.startDate}</span>
                 </div>
               )}
 

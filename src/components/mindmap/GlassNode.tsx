@@ -4,13 +4,7 @@
 import { memo } from "react"
 import { Handle, Position } from "@xyflow/react"
 import { Users, DollarSign, Target, Briefcase, TrendingUp } from "lucide-react"
-
-const formatVND = (val: number) => {
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)} tỷ`
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)} triệu`
-  if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`
-  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val)
-}
+import { formatVND } from '@/lib/format'
 
 const icons: Record<string, any> = {
   company: Briefcase,

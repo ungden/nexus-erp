@@ -4,6 +4,8 @@
 // Output: phòng ban, nhân sự, chi phí, lương trung bình
 // ============================================================
 
+import { formatVND } from './format';
+
 export interface DepartmentSuggestion {
   name: string;
   headcount: number;
@@ -126,7 +128,4 @@ export function suggestCompanyStructure(
   };
 }
 
-function formatVND(val: number): string {
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(0)} tr`;
-  return `${(val / 1_000).toFixed(0)}K`;
-}
+

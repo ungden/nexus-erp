@@ -5,6 +5,15 @@
 // ============================================================
 
 import { RoadmapNode, CompanyProfile, getCashflowStatus } from './roadmap-types';
+import { formatVND } from './format';
+
+// Basic employee type for task assignment (matches AppContext Employee shape)
+interface EmployeeBasic {
+  id: number;
+  name: string;
+  department: string;
+  role: string;
+}
 
 // ---- Industry-specific templates ----
 const INDUSTRY_DATA: Record<string, {
@@ -168,48 +177,110 @@ export function generateMonthChildren(node: RoadmapNode, profile: CompanyProfile
   });
 }
 
-// ---- Generate Week → 5-8 Tasks ----
-export function generateWeekChildren(node: RoadmapNode, profile: CompanyProfile): RoadmapNode[] {
+// ---- Generate Week → 5 Days (Thứ 2 - Thứ 6) ----
+export function generateDayChildren(node: RoadmapNode, profile: CompanyProfile): RoadmapNode[] {
   const data = getIndustryData(profile.industry);
-  const taskCount = 5 + Math.floor(Math.random() * 4); // 5-8 tasks
-  const tasks = randomPick(data.taskTemplates, taskCount);
   
-  return tasks.map((taskTitle, i) => {
-    const isRevTask = i < 2; // Đầu tiên 2 task tạo doanh thu
-    const tRevenue = isRevTask ? Math.round(node.revenue / taskCount * 2) : 0;
-    const tExpense = Math.round(node.expense / taskCount);
-    const cashflow = tRevenue - tExpense;
-
+  // Parse month number from parent title e.g. "Tuần 1 (1-7/1)" → month 1
+  const monthMatch = node.title.match(/\/(\d+)\)/);
+  const monthNum = monthMatch ? parseInt(monthMatch[1]) : 1;
+  
+  // Parse start day from parent title e.g. "Tuần 1 (1-7/1)" → startDay 1
+  const dayMatch = node.title.match(/\((\d+)-/);
+  const startDay = dayMatch ? parseInt(dayMatch[1]) : 1;
+  
+  const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'];
+  
+  return dayNames.map((dayName, i) => {
+    const dayNum = startDay + i;
+    const dRevenue = Math.round(node.revenue / 5);
+    const dExpense = Math.round(node.expense / 5);
+    const cashflow = dRevenue - dExpense;
+    
     return {
       id: generateId(),
-      level: 'task' as const,
-      title: taskTitle,
-      description: isRevTask ? 'Tạo doanh thu trực tiếp' : 'Chi phí vận hành',
-      department: data.departments[i % data.departments.length],
-      revenue: tRevenue,
-      expense: tExpense,
+      level: 'day' as const,
+      title: `${dayName} (${dayNum}/${monthNum})`,
+      description: `Kế hoạch ngày ${dayNum}/${monthNum}: Triển khai mục tiêu tuần`,
+      department: node.department || data.departments[i % data.departments.length],
+      revenue: dRevenue,
+      expense: dExpense,
       cashflow,
-      cashflowStatus: getCashflowStatus(tRevenue > 0 ? tRevenue : node.revenue / taskCount, tExpense),
-      kpis: [],
+      cashflowStatus: getCashflowStatus(dRevenue, dExpense),
+      startDate: `${new Date().getFullYear()}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`,
+      endDate: `${new Date().getFullYear()}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`,
+      kpis: randomPick(data.kpiTemplates, 1 + Math.floor(Math.random() * 2)), // 1-2 daily goals
       children: undefined,
       isExpanded: false,
     };
   });
 }
 
+// ---- Generate Day → 2-5 Tasks with Employee Assignment ----
+export function generateDayTasks(node: RoadmapNode, profile: CompanyProfile, employees?: EmployeeBasic[]): RoadmapNode[] {
+  const data = getIndustryData(profile.industry);
+  const taskCount = 2 + Math.floor(Math.random() * 4); // 2-5 tasks
+  const tasks = randomPick(data.taskTemplates, taskCount);
+  
+  // Separate employees by department type for smart assignment
+  const salesMarketingEmployees = employees?.filter(e => 
+    ['Kinh doanh', 'Marketing', 'Sales'].some(dept => e.department.includes(dept) || e.role.includes(dept))
+  ) || [];
+  const techOpsEmployees = employees?.filter(e => 
+    ['Kỹ thuật', 'Vận hành', 'IT', 'Tech', 'Finance', 'HR'].some(dept => e.department.includes(dept) || e.role.includes(dept))
+  ) || [];
+  const allEmployees = employees || [];
+
+  return tasks.map((taskTitle, i) => {
+    const isRevTask = i < Math.ceil(taskCount * 0.4); // ~40% tasks generate revenue
+    const tRevenue = isRevTask ? Math.round(node.revenue / taskCount * 2) : 0;
+    const tExpense = Math.round(node.expense / taskCount);
+    const cashflow = tRevenue - tExpense;
+    
+    // Assign employee based on task type
+    let assignee: EmployeeBasic | undefined;
+    if (isRevTask && salesMarketingEmployees.length > 0) {
+      assignee = salesMarketingEmployees[i % salesMarketingEmployees.length];
+    } else if (!isRevTask && techOpsEmployees.length > 0) {
+      assignee = techOpsEmployees[i % techOpsEmployees.length];
+    } else if (allEmployees.length > 0) {
+      assignee = allEmployees[i % allEmployees.length];
+    }
+
+    return {
+      id: generateId(),
+      level: 'task' as const,
+      title: taskTitle,
+      description: isRevTask ? 'Tạo doanh thu trực tiếp' : 'Chi phí vận hành',
+      department: assignee?.department || data.departments[i % data.departments.length],
+      revenue: tRevenue,
+      expense: tExpense,
+      cashflow,
+      cashflowStatus: getCashflowStatus(tRevenue > 0 ? tRevenue : node.revenue / taskCount, tExpense),
+      kpis: [],
+      assigneeId: assignee?.id,
+      assigneeName: assignee ? `${assignee.name} (${assignee.department})` : undefined,
+      children: undefined,
+      isExpanded: false,
+    };
+  });
+}
+
+// ---- Legacy: Generate Week → Tasks (kept for backward compat) ----
+export function generateWeekChildren(node: RoadmapNode, profile: CompanyProfile): RoadmapNode[] {
+  // Now delegates to generateDayChildren (Week → Day)
+  return generateDayChildren(node, profile);
+}
+
 // ---- Main dispatcher ----
-export function expandNode(node: RoadmapNode, profile: CompanyProfile): RoadmapNode[] {
+export function expandNode(node: RoadmapNode, profile: CompanyProfile, employees?: EmployeeBasic[]): RoadmapNode[] {
   switch (node.level) {
     case 'quarter': return generateQuarterChildren(node, profile);
     case 'month': return generateMonthChildren(node, profile);
-    case 'week': return generateWeekChildren(node, profile);
+    case 'week': return generateDayChildren(node, profile);  // Week → Days
+    case 'day': return generateDayTasks(node, profile, employees);  // Day → Tasks with employee assignment
     default: return [];
   }
 }
 
-// ---- Helpers ----
-function formatVND(val: number): string {
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)} tỷ`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(0)} triệu`;
-  return `${val.toLocaleString('vi-VN')} đ`;
-}
+

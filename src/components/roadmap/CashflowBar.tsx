@@ -1,18 +1,12 @@
 "use client"
 
 import { CashflowStatus } from "@/lib/roadmap-types"
+import { formatVND } from '@/lib/format'
 
 const statusConfig: Record<CashflowStatus, { label: string; color: string; bg: string; icon: string }> = {
   healthy: { label: 'Dòng tiền khoẻ', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', icon: '💚' },
   warning: { label: 'Cần lưu ý', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', icon: '🟡' },
   danger: { label: 'Nguy hiểm', color: 'text-red-700', bg: 'bg-red-50 border-red-200', icon: '🔴' },
-}
-
-function formatVND(val: number): string {
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)} tỷ`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(0)} tr`;
-  if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`;
-  return new Intl.NumberFormat('vi-VN').format(val);
 }
 
 export function CashflowBar({ revenue, expense, cashflow, status }: {

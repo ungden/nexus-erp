@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Roadmap } from '@/lib/roadmap-types';
 
 // Types
@@ -8,6 +8,7 @@ export type Stage = 'Tiếp cận' | 'Đàm phán' | 'Chốt sale' | 'Thất b�
 export type TaskStatus = 'todo' | 'in-progress' | 'done';
 export type TaskPriority = 'high' | 'medium' | 'low';
 export type KpiStatus = 'on-track' | 'at-risk' | 'behind';
+export type CustomerType = 'B2B' | 'B2C';
 
 export interface Deal {
   id: string;
@@ -16,6 +17,7 @@ export interface Deal {
   amount: number;
   stage: Stage;
   date: string;
+  customerId?: string; // Link to Customer
 }
 
 export interface Task {
@@ -71,6 +73,51 @@ export interface Expense {
   date: string;
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  type: CustomerType;
+  company?: string;       // For B2B
+  taxId?: string;         // MST for B2B
+  phone: string;
+  email: string;
+  address?: string;
+  contactPerson?: string; // For B2B
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Partner {
+  id: string;
+  name: string;
+  type: 'Đối tác' | 'Nhà cung cấp';
+  contactPerson: string;
+  phone: string;
+  email: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Receivable {
+  id: string;
+  customerId: string;
+  dealId: string;
+  amount: number;
+  paidAmount: number;
+  dueDate: string;
+  status: 'Chưa thu' | 'Thu một phần' | 'Đã thu đủ' | 'Quá hạn';
+}
+
+export interface Payable {
+  id: string;
+  partnerId: string;
+  amount: number;
+  paidAmount: number;
+  dueDate: string;
+  description: string;
+  status: 'Chưa trả' | 'Trả một phần' | 'Đã trả đủ' | 'Quá hạn';
+}
+
 interface AppState {
   deals: Deal[];
   setDeals: React.Dispatch<React.SetStateAction<Deal[]>>;
@@ -91,6 +138,14 @@ interface AppState {
   setFinance: React.Dispatch<React.SetStateAction<AppState['finance']>>;
   roadmap: Roadmap | null;
   setRoadmap: (roadmap: Roadmap | null) => void;
+  customers: Customer[];
+  setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
+  partners: Partner[];
+  setPartners: React.Dispatch<React.SetStateAction<Partner[]>>;
+  receivables: Receivable[];
+  setReceivables: React.Dispatch<React.SetStateAction<Receivable[]>>;
+  payables: Payable[];
+  setPayables: React.Dispatch<React.SetStateAction<Payable[]>>;
 }
 
 const initialEmployees: Employee[] = [
@@ -103,11 +158,11 @@ const initialEmployees: Employee[] = [
 ];
 
 const initialDeals: Deal[] = [
-  { id: '1', title: 'Hợp đồng phần mềm ERP', company: 'Công ty TNHH ABC', amount: 150000000, stage: 'Tiếp cận', date: '12/10/2023' },
-  { id: '2', title: 'Tư vấn chiến lược Marketing', company: 'Tập đoàn XYZ', amount: 80000000, stage: 'Tiếp cận', date: '15/10/2023' },
-  { id: '3', title: 'Thiết kế Website E-commerce', company: 'Cửa hàng Thời trang M', amount: 45000000, stage: 'Đàm phán', date: '10/10/2023' },
-  { id: '4', title: 'Dịch vụ SEO tổng thể', company: 'Nha khoa Nụ Cười', amount: 120000000, stage: 'Chốt sale', date: '05/10/2023' },
-  { id: '5', title: 'Triển khai CRM', company: 'Công ty BĐS Hưng Thịnh', amount: 350000000, stage: 'Chốt sale', date: '01/10/2023' },
+  { id: '1', title: 'Hợp đồng phần mềm ERP', company: 'Công ty TNHH ABC', amount: 150000000, stage: 'Tiếp cận', date: '12/10/2023', customerId: 'c1' },
+  { id: '2', title: 'Tư vấn chiến lược Marketing', company: 'Tập đoàn XYZ', amount: 80000000, stage: 'Tiếp cận', date: '15/10/2023', customerId: 'c2' },
+  { id: '3', title: 'Thiết kế Website E-commerce', company: 'Cửa hàng Thời trang M', amount: 45000000, stage: 'Đàm phán', date: '10/10/2023', customerId: 'c4' },
+  { id: '4', title: 'Dịch vụ SEO tổng thể', company: 'Nha khoa Nụ Cười', amount: 120000000, stage: 'Chốt sale', date: '05/10/2023', customerId: 'c1' },
+  { id: '5', title: 'Triển khai CRM', company: 'Công ty BĐS Hưng Thịnh', amount: 350000000, stage: 'Chốt sale', date: '01/10/2023', customerId: 'c2' },
 ];
 
 const initialTasks: Task[] = [
@@ -134,20 +189,80 @@ const initialExpenses: Expense[] = [
   { id: 4, title: 'Chi phí mua hàng', amount: 150000000, category: 'cogs', date: '02/10/2023' },
 ];
 
+const initialCustomers: Customer[] = [
+  { id: 'c1', name: 'Công ty TNHH ABC', type: 'B2B', company: 'Công ty TNHH ABC', taxId: '0123456789', phone: '028-1234-5678', email: 'info@abc.vn', contactPerson: 'Anh Minh', address: '123 Nguyễn Huệ, Q.1, TP.HCM', createdAt: '2024-01-15' },
+  { id: 'c2', name: 'Tập đoàn XYZ', type: 'B2B', company: 'Tập đoàn XYZ', taxId: '9876543210', phone: '024-8765-4321', email: 'contact@xyz.com', contactPerson: 'Chị Lan', address: '456 Lý Thường Kiệt, Hà Nội', createdAt: '2024-02-20' },
+  { id: 'c3', name: 'Nguyễn Thị Hoa', type: 'B2C', phone: '0901234567', email: 'hoa.nguyen@gmail.com', address: '789 Trần Hưng Đạo, Đà Nẵng', createdAt: '2024-03-10' },
+  { id: 'c4', name: 'Cửa hàng Thời trang M', type: 'B2B', company: 'Cửa hàng Thời trang M', phone: '0912345678', email: 'info@fashionm.vn', contactPerson: 'Anh Tuấn', createdAt: '2024-04-05' },
+  { id: 'c5', name: 'Trần Văn Nam', type: 'B2C', phone: '0987654321', email: 'nam.tran@yahoo.com', createdAt: '2024-05-18' },
+];
+
+const initialPartners: Partner[] = [
+  { id: 'p1', name: 'Công ty TNHH Cung ứng Vật tư', type: 'Nhà cung cấp', contactPerson: 'Anh Đức', phone: '028-9999-8888', email: 'duc@vattu.vn', notes: 'NCC vật tư chính', createdAt: '2024-01-01' },
+  { id: 'p2', name: 'Agency Marketing Pro', type: 'Đối tác', contactPerson: 'Chị Mai', phone: '0977-888-999', email: 'mai@mktpro.vn', notes: 'Đối tác marketing chiến lược', createdAt: '2024-02-15' },
+];
+
+const initialReceivables: Receivable[] = [
+  { id: 'r1', customerId: 'c1', dealId: '4', amount: 120000000, paidAmount: 60000000, dueDate: '2024-12-31', status: 'Thu một phần' },
+  { id: 'r2', customerId: 'c2', dealId: '5', amount: 350000000, paidAmount: 0, dueDate: '2024-11-30', status: 'Chưa thu' },
+];
+
+const initialPayables: Payable[] = [
+  { id: 'pa1', partnerId: 'p1', amount: 150000000, paidAmount: 150000000, dueDate: '2024-10-15', description: 'Mua vật tư tháng 10', status: 'Đã trả đủ' },
+  { id: 'pa2', partnerId: 'p1', amount: 80000000, paidAmount: 30000000, dueDate: '2024-12-01', description: 'Mua vật tư tháng 11', status: 'Trả một phần' },
+];
+
 const AppContext = createContext<AppState | undefined>(undefined);
 
+const STORAGE_KEY = 'nexus-erp-state';
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const stored = localStorage.getItem(`${STORAGE_KEY}-${key}`);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveToStorage<T>(key: string, value: T) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`${STORAGE_KEY}-${key}`, JSON.stringify(value));
+  } catch { /* quota exceeded — ignore */ }
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [deals, setDeals] = useState<Deal[]>(initialDeals);
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [kpis, setKpis] = useState<KPI[]>(initialKpis);
-  const [payrolls, setPayrolls] = useState<PayrollRecord[]>(initialPayrolls);
-  const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
-  const [finance, setFinance] = useState({
+  const [deals, setDeals] = useState<Deal[]>(() => loadFromStorage('deals', initialDeals));
+  const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage('tasks', initialTasks));
+  const [employees, setEmployees] = useState<Employee[]>(() => loadFromStorage('employees', initialEmployees));
+  const [kpis, setKpis] = useState<KPI[]>(() => loadFromStorage('kpis', initialKpis));
+  const [payrolls, setPayrolls] = useState<PayrollRecord[]>(() => loadFromStorage('payrolls', initialPayrolls));
+  const [expenses, setExpenses] = useState<Expense[]>(() => loadFromStorage('expenses', initialExpenses));
+  const [finance, setFinance] = useState(() => loadFromStorage('finance', {
     targetRevenue: 1000000000,
     allocations: { cogs: 30, hr: 25, mkt: 15, ops: 10, profit: 20 }
-  });
-  const [roadmap, setRoadmapState] = useState<Roadmap | null>(null);
+  }));
+  const [roadmap, setRoadmapState] = useState<Roadmap | null>(() => loadFromStorage('roadmap', null));
+  const [customers, setCustomers] = useState<Customer[]>(() => loadFromStorage('customers', initialCustomers));
+  const [partners, setPartners] = useState<Partner[]>(() => loadFromStorage('partners', initialPartners));
+  const [receivables, setReceivables] = useState<Receivable[]>(() => loadFromStorage('receivables', initialReceivables));
+  const [payables, setPayables] = useState<Payable[]>(() => loadFromStorage('payables', initialPayables));
+
+  // Persist to localStorage on every change
+  useEffect(() => { saveToStorage('deals', deals); }, [deals]);
+  useEffect(() => { saveToStorage('tasks', tasks); }, [tasks]);
+  useEffect(() => { saveToStorage('employees', employees); }, [employees]);
+  useEffect(() => { saveToStorage('kpis', kpis); }, [kpis]);
+  useEffect(() => { saveToStorage('payrolls', payrolls); }, [payrolls]);
+  useEffect(() => { saveToStorage('expenses', expenses); }, [expenses]);
+  useEffect(() => { saveToStorage('finance', finance); }, [finance]);
+  useEffect(() => { saveToStorage('roadmap', roadmap); }, [roadmap]);
+  useEffect(() => { saveToStorage('customers', customers); }, [customers]);
+  useEffect(() => { saveToStorage('partners', partners); }, [partners]);
+  useEffect(() => { saveToStorage('receivables', receivables); }, [receivables]);
+  useEffect(() => { saveToStorage('payables', payables); }, [payables]);
 
   const setRoadmap = (rm: Roadmap | null) => setRoadmapState(rm);
 
@@ -161,6 +276,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       expenses, setExpenses,
       finance, setFinance,
       roadmap, setRoadmap,
+      customers, setCustomers,
+      partners, setPartners,
+      receivables, setReceivables,
+      payables, setPayables,
     }}>
       {children}
     </AppContext.Provider>
