@@ -132,7 +132,7 @@ export default function Dashboard() {
       value: actualRevenue, 
       icon: Wallet,
       iconColor: 'text-primary',
-      iconBg: 'bg-primary/10',
+      iconBg: 'bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20',
       trend: revenuePercent >= 50 ? 'up' : 'down',
       trendValue: `${revenuePercent}% Mục tiêu`,
       trendPositive: actualRevenue >= targetRevenue
@@ -143,7 +143,7 @@ export default function Dashboard() {
       value: actualHRCost, 
       icon: Users,
       iconColor: 'text-blue-600',
-      iconBg: 'bg-blue-50',
+      iconBg: 'bg-gradient-to-br from-blue-100 to-blue-50 border border-blue-200',
       trend: actualHRCost <= hrBudget ? 'up' : 'down',
       trendValue: actualHRCost <= hrBudget ? `Dư ${formatVND(hrBudget - actualHRCost)}` : `Vượt ${formatVND(actualHRCost - hrBudget)}`,
       trendPositive: actualHRCost <= hrBudget
@@ -154,7 +154,7 @@ export default function Dashboard() {
       value: actualMktCost, 
       icon: TrendingUp,
       iconColor: 'text-amber-500',
-      iconBg: 'bg-amber-50',
+      iconBg: 'bg-gradient-to-br from-amber-100 to-amber-50 border border-amber-200',
       trend: actualMktCost <= mktBudget ? 'up' : 'down',
       trendValue: actualMktCost <= mktBudget ? `Dư ${formatVND(mktBudget - actualMktCost)}` : `Vượt ${formatVND(actualMktCost - mktBudget)}`,
       trendPositive: actualMktCost <= mktBudget
@@ -165,7 +165,7 @@ export default function Dashboard() {
       value: actualProfit, 
       icon: DollarSign,
       iconColor: 'text-emerald-600',
-      iconBg: 'bg-emerald-50',
+      iconBg: 'bg-gradient-to-br from-emerald-100 to-emerald-50 border border-emerald-200',
       trend: actualProfit >= 0 ? 'up' : 'down',
       trendValue: `Target: ${formatVND(profitTarget)}`,
       trendPositive: actualProfit >= profitTarget
@@ -276,7 +276,7 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Actual Performance Grid */}
-      <h2 className="text-lg font-bold text-foreground mt-8">Tình hình Thực tế (Actuals)</h2>
+      <h2 className="text-lg font-bold text-foreground mt-10">Tình hình Thực tế (Actuals)</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {actualCards.map((card, i) => (
           <motion.div 
@@ -285,7 +285,8 @@ export default function Dashboard() {
             variants={fadeIn}
             initial="hidden"
             animate="show"
-            className="glass-card p-5 md:p-6 hover:shadow-lg transition-shadow"
+            whileHover={{ y: -4, scale: 1.02 }}
+            className="glass-card p-5 md:p-6 hover:shadow-lg transition-all duration-300 ease-out cursor-default"
           >
             <div className="flex items-start justify-between mb-3">
               <div className={`p-2.5 rounded-xl ${card.iconBg}`}>
@@ -367,23 +368,29 @@ export default function Dashboard() {
         </motion.div>
       ) : (
         <motion.div 
-          className="glass-card p-6 flex items-center justify-between"
+          className="relative overflow-hidden rounded-2xl border-2 border-dashed border-primary/30 bg-gradient-to-br from-primary/5 to-background p-8 sm:p-10 flex flex-col sm:flex-row items-center justify-between gap-6"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
         >
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/10 rounded-xl">
-              <MapPin className="w-6 h-6 text-primary" />
+          <div className="absolute -top-12 -right-12 w-40 h-40 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-accent/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="flex items-center gap-5 relative z-10">
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse-soft" />
+              <div className="p-4 bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl border border-primary/20 relative">
+                <MapPin className="w-8 h-8 text-primary" />
+              </div>
             </div>
             <div>
-              <h3 className="font-bold text-foreground">Tạo AI Roadmap để theo dõi kế hoạch</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Phân tích doanh thu, chi phí, KPI theo Quý/Tháng/Tuần/Ngày</p>
+              <h3 className="text-xl font-bold text-foreground">Tạo AI Roadmap để theo dõi kế hoạch</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md">Hệ thống AI sẽ tự động phân bổ ngân sách, mục tiêu, và công việc hàng ngày dựa trên doanh thu kỳ vọng.</p>
             </div>
           </div>
-          <Link href="/erp/plan">
-            <button className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg text-white bg-primary hover:bg-primary/90 transition-colors">
-              Tạo Roadmap <ChevronRight className="w-4 h-4" />
+          <Link href="/erp/plan" className="relative z-10 shrink-0">
+            <button className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-lg shadow-primary/25 transition-all duration-300 hover:scale-105 hover:-translate-y-1">
+              Tạo Roadmap Ngay <ChevronRight className="w-4 h-4" />
             </button>
           </Link>
         </motion.div>

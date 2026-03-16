@@ -1,7 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronRight, ChevronDown, Loader2, TrendingUp, Wallet, DollarSign, Circle, User, BarChart3 } from "lucide-react"
+import { ChevronRight, Loader2, TrendingUp, Wallet, DollarSign, Circle, User, BarChart3 } from "lucide-react"
 import { RoadmapNode, CashflowStatus, LEVEL_ICONS } from "@/lib/roadmap-types"
 import { formatVND } from '@/lib/format'
 
@@ -24,19 +24,19 @@ export function RoadmapNodeCard({ node, depth, onExpand }: Props) {
   const isQuarter = node.level === 'quarter';
   const canExpand = !isTask;
   const hasChildren = node.children && node.children.length > 0;
-  const indent = depth * 1;
 
   return (
-    <div style={{ marginLeft: `${indent}rem` }}>
+    <div className="relative">
+      {/* Decorative connecting line for children (added dynamically via wrapper) */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
         className={`
-          glass-card overflow-hidden transition-all duration-200
+          glass-card overflow-hidden transition-all duration-300 ease-out
           ${isTask ? 'border-l-2' : 'border-l-4'}
           ${node.cashflowStatus === 'healthy' ? 'border-l-emerald-400' : node.cashflowStatus === 'warning' ? 'border-l-amber-400' : 'border-l-red-400'}
-          ${canExpand ? 'hover:shadow-lg cursor-pointer' : ''}
+          ${canExpand ? 'hover:shadow-lg hover:-translate-y-0.5 cursor-pointer' : 'hover:border-primary/30'}
         `}
         onClick={() => canExpand && onExpand(node.id)}
       >
@@ -48,11 +48,13 @@ export function RoadmapNodeCard({ node, depth, onExpand }: Props) {
               {node.isLoading ? (
                 <Loader2 className="w-5 h-5 text-primary animate-spin" />
               ) : canExpand ? (
-                node.isExpanded ? (
-                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                ) : (
+                <motion.div 
+                  initial={false}
+                  animate={{ rotate: node.isExpanded ? 90 : 0 }}
+                  transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                >
                   <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                )
+                </motion.div>
               ) : (
                 <Circle className="w-4 h-4 text-muted-foreground/40 mt-0.5" />
               )}
@@ -189,15 +191,19 @@ export function RoadmapNodeCard({ node, depth, onExpand }: Props) {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="space-y-2 mt-2"
+            className="relative space-y-2 mt-2 ml-5 pl-4 border-l-2 border-border/60"
           >
+            {/* The horizontal connecting line for the first child if needed, but border-l is enough for modern UI */}
             {node.children.map((child, i) => (
               <motion.div
                 key={child.id}
+                className="relative"
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
               >
+                {/* Horizontal tick mark connecting to child */}
+                <div className="absolute -left-4 top-6 w-3 border-t-2 border-border/60" />
                 <RoadmapNodeCard
                   node={child}
                   depth={depth + 1}

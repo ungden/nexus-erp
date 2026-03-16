@@ -4,8 +4,9 @@ import { useState, useMemo } from 'react';
 import {
   Plus, Calendar, X, Edit2, Search, Trash2,
   Users, Handshake, BarChart3, Receipt,
-  Building2, User, Phone, Mail,
+  Building2, User, Phone, Mail, Inbox
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import {
   useAppContext,
@@ -67,18 +68,25 @@ export default function CRM() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-border mb-6 overflow-x-auto">
+      <div className="flex gap-2 mb-6 overflow-x-auto p-1 bg-muted/30 rounded-full w-fit border border-border/50">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
             className={cn(
-              'flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors',
+              'relative flex items-center gap-2 px-5 py-2 text-sm font-medium whitespace-nowrap rounded-full transition-colors z-10',
               activeTab === t.key
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
+                ? 'text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
             )}
           >
+            {activeTab === t.key && (
+              <motion.div
+                layoutId="activeTab"
+                className="absolute inset-0 bg-background shadow-sm rounded-full -z-10 border border-border/50"
+                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+              />
+            )}
             <t.icon className="h-4 w-4" />
             {t.label}
           </button>
@@ -240,7 +248,7 @@ function CustomersTab({
             {filtered.map((c) => (
               <tr
                 key={c.id}
-                className="border-b border-border/50 hover:bg-muted/20 transition-colors group"
+                className="border-b border-border/50 hover:bg-primary/5 hover:shadow-sm transition-all group"
               >
                 <td className="px-4 py-3 font-medium text-foreground">{c.name}</td>
                 <td className="px-4 py-3">
@@ -294,8 +302,11 @@ function CustomersTab({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                  Không tìm thấy khách hàng nào.
+                <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center">
+                    <Inbox className="h-10 w-10 mb-3 opacity-20" />
+                    <p>Không tìm thấy khách hàng nào.</p>
+                  </div>
                 </td>
               </tr>
             )}
@@ -304,158 +315,170 @@ function CustomersTab({
       </div>
 
       {/* Add Customer Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-foreground">Thêm khách hàng mới</h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-muted-foreground/70 hover:text-muted-foreground"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={handleAdd} className="space-y-4">
-              {/* Type */}
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Loại khách hàng
-                </label>
-                <div className="flex gap-3">
-                  {(['B2B', 'B2C'] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setNewCust((p) => ({ ...p, type: t }))}
-                      className={cn(
-                        'flex-1 flex items-center justify-center gap-2 py-2 rounded-md border text-sm font-medium transition-colors',
-                        newCust.type === t
-                          ? 'bg-primary/10 border-primary text-primary'
-                          : 'bg-card border-border text-foreground/70 hover:bg-muted/30',
-                      )}
-                    >
-                      {t === 'B2B' ? (
-                        <Building2 className="h-4 w-4" />
-                      ) : (
-                        <User className="h-4 w-4" />
-                      )}
-                      {t}
-                    </button>
-                  ))}
-                </div>
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-foreground">Thêm khách hàng mới</h2>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-muted-foreground/70 hover:text-muted-foreground"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Tên {newCust.type === 'B2B' ? 'công ty' : 'khách hàng'} *
-                </label>
-                <input
-                  required
-                  type="text"
-                  className={inputCls}
-                  value={newCust.name || ''}
-                  onChange={(e) => setNewCust((p) => ({ ...p, name: e.target.value }))}
-                />
-              </div>
-              {newCust.type === 'B2B' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground/90 mb-1">
-                      Tên công ty
-                    </label>
-                    <input
-                      type="text"
-                      className={inputCls}
-                      value={newCust.company || ''}
-                      onChange={(e) =>
-                        setNewCust((p) => ({ ...p, company: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground/90 mb-1">
-                      Mã số thuế (MST)
-                    </label>
-                    <input
-                      type="text"
-                      className={inputCls}
-                      value={newCust.taxId || ''}
-                      onChange={(e) =>
-                        setNewCust((p) => ({ ...p, taxId: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground/90 mb-1">
-                      Người liên hệ
-                    </label>
-                    <input
-                      type="text"
-                      className={inputCls}
-                      value={newCust.contactPerson || ''}
-                      onChange={(e) =>
-                        setNewCust((p) => ({ ...p, contactPerson: e.target.value }))
-                      }
-                    />
-                  </div>
-                </>
-              )}
-              <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleAdd} className="space-y-4">
+                {/* Type */}
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1">
-                    Số điện thoại *
+                    Loại khách hàng
+                  </label>
+                  <div className="flex gap-3">
+                    {(['B2B', 'B2C'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setNewCust((p) => ({ ...p, type: t }))}
+                        className={cn(
+                          'flex-1 flex items-center justify-center gap-2 py-2 rounded-md border text-sm font-medium transition-colors',
+                          newCust.type === t
+                            ? 'bg-primary/10 border-primary text-primary'
+                            : 'bg-card border-border text-foreground/70 hover:bg-muted/30',
+                        )}
+                      >
+                        {t === 'B2B' ? (
+                          <Building2 className="h-4 w-4" />
+                        ) : (
+                          <User className="h-4 w-4" />
+                        )}
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">
+                    Tên {newCust.type === 'B2B' ? 'công ty' : 'khách hàng'} *
                   </label>
                   <input
                     required
                     type="text"
                     className={inputCls}
-                    value={newCust.phone || ''}
-                    onChange={(e) => setNewCust((p) => ({ ...p, phone: e.target.value }))}
+                    value={newCust.name || ''}
+                    onChange={(e) => setNewCust((p) => ({ ...p, name: e.target.value }))}
                   />
+                </div>
+                {newCust.type === 'B2B' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground/90 mb-1">
+                        Tên công ty
+                      </label>
+                      <input
+                        type="text"
+                        className={inputCls}
+                        value={newCust.company || ''}
+                        onChange={(e) =>
+                          setNewCust((p) => ({ ...p, company: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground/90 mb-1">
+                        Mã số thuế (MST)
+                      </label>
+                      <input
+                        type="text"
+                        className={inputCls}
+                        value={newCust.taxId || ''}
+                        onChange={(e) =>
+                          setNewCust((p) => ({ ...p, taxId: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground/90 mb-1">
+                        Người liên hệ
+                      </label>
+                      <input
+                        type="text"
+                        className={inputCls}
+                        value={newCust.contactPerson || ''}
+                        onChange={(e) =>
+                          setNewCust((p) => ({ ...p, contactPerson: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground/90 mb-1">
+                      Số điện thoại *
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      className={inputCls}
+                      value={newCust.phone || ''}
+                      onChange={(e) => setNewCust((p) => ({ ...p, phone: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground/90 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      required
+                      type="email"
+                      className={inputCls}
+                      value={newCust.email || ''}
+                      onChange={(e) => setNewCust((p) => ({ ...p, email: e.target.value }))}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1">
-                    Email *
+                    Địa chỉ
                   </label>
                   <input
-                    required
-                    type="email"
+                    type="text"
                     className={inputCls}
-                    value={newCust.email || ''}
-                    onChange={(e) => setNewCust((p) => ({ ...p, email: e.target.value }))}
+                    value={newCust.address || ''}
+                    onChange={(e) => setNewCust((p) => ({ ...p, address: e.target.value }))}
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Địa chỉ
-                </label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={newCust.address || ''}
-                  onChange={(e) => setNewCust((p) => ({ ...p, address: e.target.value }))}
-                />
-              </div>
-              <div className="pt-4 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-foreground/90 bg-card border border-border rounded-md hover:bg-muted/30"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90"
-                >
-                  Thêm mới
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                <div className="pt-4 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-foreground/90 bg-card border border-border rounded-md hover:bg-muted/30"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90"
+                  >
+                    Thêm mới
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -589,11 +612,12 @@ function PipelineTab({
               {deals
                 .filter((d) => d.stage === stage.name)
                 .map((deal) => (
-                  <div
+                  <motion.div
                     key={deal.id}
+                    whileHover={{ y: -4, scale: 1.02 }}
                     draggable
-                    onDragStart={(e) => handleDragStart(e, deal.id)}
-                    className="glass-card p-4 cursor-grab active:cursor-grabbing hover:border-primary transition-colors group relative"
+                    onDragStart={(e) => handleDragStart(e as unknown as React.DragEvent, deal.id)}
+                    className="glass-card p-4 cursor-grab active:cursor-grabbing hover:border-primary transition-all group relative hover:shadow-md"
                   >
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="text-sm font-medium text-foreground pr-12">
@@ -635,7 +659,7 @@ function PipelineTab({
                         {deal.date}
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
             </div>
           </div>
@@ -643,128 +667,140 @@ function PipelineTab({
       </div>
 
       {/* Add / Edit Deal Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-foreground">
-                {editingDeal ? 'Chỉnh sửa cơ hội' : 'Thêm cơ hội mới'}
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-muted-foreground/70 hover:text-muted-foreground"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Tên cơ hội / Hợp đồng
-                </label>
-                <input
-                  required
-                  type="text"
-                  className={inputCls}
-                  value={newDeal.title || ''}
-                  onChange={(e) =>
-                    setNewDeal((p) => ({ ...p, title: e.target.value }))
-                  }
-                  placeholder="VD: Hợp đồng phần mềm ERP"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Khách hàng
-                </label>
-                <select
-                  className={inputCls}
-                  value={newDeal.customerId || ''}
-                  onChange={(e) => {
-                    const cid = e.target.value;
-                    const cust = customers.find((c) => c.id === cid);
-                    setNewDeal((p) => ({
-                      ...p,
-                      customerId: cid || undefined,
-                      company: cust?.name || p.company || '',
-                    }));
-                  }}
-                >
-                  <option value="">-- Chọn khách hàng --</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.type})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Tên công ty / Khách hàng
-                </label>
-                <input
-                  required
-                  type="text"
-                  className={inputCls}
-                  value={newDeal.company || ''}
-                  onChange={(e) =>
-                    setNewDeal((p) => ({ ...p, company: e.target.value }))
-                  }
-                  placeholder="VD: Công ty TNHH ABC"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Giá trị dự kiến (VNĐ)
-                </label>
-                <input
-                  required
-                  type="number"
-                  className={inputCls}
-                  value={newDeal.amount || ''}
-                  onChange={(e) =>
-                    setNewDeal((p) => ({ ...p, amount: Number(e.target.value) }))
-                  }
-                  placeholder="VD: 150000000"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Giai đoạn
-                </label>
-                <select
-                  className={inputCls}
-                  value={newDeal.stage || 'Tiếp cận'}
-                  onChange={(e) =>
-                    setNewDeal((p) => ({ ...p, stage: e.target.value as Stage }))
-                  }
-                >
-                  {stages.map((s) => (
-                    <option key={s.name} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="pt-4 flex justify-end gap-3">
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card p-6 w-full max-w-md shadow-xl"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-foreground">
+                  {editingDeal ? 'Chỉnh sửa cơ hội' : 'Thêm cơ hội mới'}
+                </h2>
                 <button
-                  type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-foreground/90 bg-card border border-border rounded-md hover:bg-muted/30"
+                  className="text-muted-foreground/70 hover:text-muted-foreground"
                 >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90"
-                >
-                  {editingDeal ? 'Lưu thay đổi' : 'Thêm mới'}
+                  <X className="h-5 w-5" />
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <form onSubmit={handleSave} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">
+                    Tên cơ hội / Hợp đồng
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    className={inputCls}
+                    value={newDeal.title || ''}
+                    onChange={(e) =>
+                      setNewDeal((p) => ({ ...p, title: e.target.value }))
+                    }
+                    placeholder="VD: Hợp đồng phần mềm ERP"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">
+                    Khách hàng
+                  </label>
+                  <select
+                    className={inputCls}
+                    value={newDeal.customerId || ''}
+                    onChange={(e) => {
+                      const cid = e.target.value;
+                      const cust = customers.find((c) => c.id === cid);
+                      setNewDeal((p) => ({
+                        ...p,
+                        customerId: cid || undefined,
+                        company: cust?.name || p.company || '',
+                      }));
+                    }}
+                  >
+                    <option value="">-- Chọn khách hàng --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">
+                    Tên công ty / Khách hàng
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    className={inputCls}
+                    value={newDeal.company || ''}
+                    onChange={(e) =>
+                      setNewDeal((p) => ({ ...p, company: e.target.value }))
+                    }
+                    placeholder="VD: Công ty TNHH ABC"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">
+                    Giá trị dự kiến (VNĐ)
+                  </label>
+                  <input
+                    required
+                    type="number"
+                    className={inputCls}
+                    value={newDeal.amount || ''}
+                    onChange={(e) =>
+                      setNewDeal((p) => ({ ...p, amount: Number(e.target.value) }))
+                    }
+                    placeholder="VD: 150000000"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">
+                    Giai đoạn
+                  </label>
+                  <select
+                    className={inputCls}
+                    value={newDeal.stage || 'Tiếp cận'}
+                    onChange={(e) =>
+                      setNewDeal((p) => ({ ...p, stage: e.target.value as Stage }))
+                    }
+                  >
+                    {stages.map((s) => (
+                      <option key={s.name} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="pt-4 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-foreground/90 bg-card border border-border rounded-md hover:bg-muted/30"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90"
+                  >
+                    {editingDeal ? 'Lưu thay đổi' : 'Thêm mới'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -837,7 +873,7 @@ function PartnersTab({
             {partners.map((p) => (
               <tr
                 key={p.id}
-                className="border-b border-border/50 hover:bg-muted/20 transition-colors group"
+                className="border-b border-border/50 hover:bg-primary/5 hover:shadow-sm transition-all group"
               >
                 <td className="px-4 py-3 font-medium text-foreground">{p.name}</td>
                 <td className="px-4 py-3">
@@ -871,8 +907,11 @@ function PartnersTab({
             ))}
             {partners.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                  Chưa có đối tác nào.
+                <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center">
+                    <Inbox className="h-10 w-10 mb-3 opacity-20" />
+                    <p>Chưa có đối tác nào.</p>
+                  </div>
                 </td>
               </tr>
             )}
@@ -881,120 +920,132 @@ function PartnersTab({
       </div>
 
       {/* Add Partner Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-foreground">Thêm đối tác / NCC</h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-muted-foreground/70 hover:text-muted-foreground"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={handleAdd} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Tên đối tác *
-                </label>
-                <input
-                  required
-                  type="text"
-                  className={inputCls}
-                  value={newP.name || ''}
-                  onChange={(e) => setNewP((p) => ({ ...p, name: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Loại
-                </label>
-                <select
-                  className={inputCls}
-                  value={newP.type || 'Đối tác'}
-                  onChange={(e) =>
-                    setNewP((p) => ({ ...p, type: e.target.value as Partner['type'] }))
-                  }
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card p-6 w-full max-w-md shadow-xl"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-foreground">Thêm đối tác / NCC</h2>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-muted-foreground/70 hover:text-muted-foreground"
                 >
-                  <option value="Đối tác">Đối tác</option>
-                  <option value="Nhà cung cấp">Nhà cung cấp</option>
-                </select>
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Người liên hệ *
-                </label>
-                <input
-                  required
-                  type="text"
-                  className={inputCls}
-                  value={newP.contactPerson || ''}
-                  onChange={(e) =>
-                    setNewP((p) => ({ ...p, contactPerson: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleAdd} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1">
-                    SĐT *
+                    Tên đối tác *
                   </label>
                   <input
                     required
                     type="text"
                     className={inputCls}
-                    value={newP.phone || ''}
-                    onChange={(e) =>
-                      setNewP((p) => ({ ...p, phone: e.target.value }))
-                    }
+                    value={newP.name || ''}
+                    onChange={(e) => setNewP((p) => ({ ...p, name: e.target.value }))}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1">
-                    Email *
+                    Loại
+                  </label>
+                  <select
+                    className={inputCls}
+                    value={newP.type || 'Đối tác'}
+                    onChange={(e) =>
+                      setNewP((p) => ({ ...p, type: e.target.value as Partner['type'] }))
+                    }
+                  >
+                    <option value="Đối tác">Đối tác</option>
+                    <option value="Nhà cung cấp">Nhà cung cấp</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">
+                    Người liên hệ *
                   </label>
                   <input
                     required
-                    type="email"
+                    type="text"
                     className={inputCls}
-                    value={newP.email || ''}
+                    value={newP.contactPerson || ''}
                     onChange={(e) =>
-                      setNewP((p) => ({ ...p, email: e.target.value }))
+                      setNewP((p) => ({ ...p, contactPerson: e.target.value }))
                     }
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground/90 mb-1">
-                  Ghi chú
-                </label>
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={newP.notes || ''}
-                  onChange={(e) => setNewP((p) => ({ ...p, notes: e.target.value }))}
-                />
-              </div>
-              <div className="pt-4 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-foreground/90 bg-card border border-border rounded-md hover:bg-muted/30"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90"
-                >
-                  Thêm mới
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground/90 mb-1">
+                      SĐT *
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      className={inputCls}
+                      value={newP.phone || ''}
+                      onChange={(e) =>
+                        setNewP((p) => ({ ...p, phone: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground/90 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      required
+                      type="email"
+                      className={inputCls}
+                      value={newP.email || ''}
+                      onChange={(e) =>
+                        setNewP((p) => ({ ...p, email: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">
+                    Ghi chú
+                  </label>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    value={newP.notes || ''}
+                    onChange={(e) => setNewP((p) => ({ ...p, notes: e.target.value }))}
+                  />
+                </div>
+                <div className="pt-4 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-foreground/90 bg-card border border-border rounded-md hover:bg-muted/30"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90"
+                  >
+                    Thêm mới
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -1154,7 +1205,7 @@ function DebtsTab({
               {receivables.map((r) => (
                 <tr
                   key={r.id}
-                  className="border-b border-border/50 hover:bg-muted/20 transition-colors"
+                  className="border-b border-border/50 hover:bg-primary/5 hover:shadow-sm transition-all"
                 >
                   <td className="px-4 py-3 font-medium text-foreground">
                     {custName(r.customerId)}
@@ -1176,9 +1227,12 @@ function DebtsTab({
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-4 py-8 text-center text-muted-foreground"
+                    className="px-4 py-12 text-center text-muted-foreground"
                   >
-                    Không có công nợ phải thu.
+                    <div className="flex flex-col items-center justify-center">
+                      <Inbox className="h-10 w-10 mb-3 opacity-20" />
+                      <p>Không có công nợ phải thu.</p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -1217,7 +1271,7 @@ function DebtsTab({
               {payables.map((p) => (
                 <tr
                   key={p.id}
-                  className="border-b border-border/50 hover:bg-muted/20 transition-colors"
+                  className="border-b border-border/50 hover:bg-primary/5 hover:shadow-sm transition-all"
                 >
                   <td className="px-4 py-3 font-medium text-foreground">
                     {partnerName(p.partnerId)}
@@ -1240,9 +1294,12 @@ function DebtsTab({
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-8 text-center text-muted-foreground"
+                    className="px-4 py-12 text-center text-muted-foreground"
                   >
-                    Không có công nợ phải trả.
+                    <div className="flex flex-col items-center justify-center">
+                      <Inbox className="h-10 w-10 mb-3 opacity-20" />
+                      <p>Không có công nợ phải trả.</p>
+                    </div>
                   </td>
                 </tr>
               )}
