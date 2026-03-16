@@ -17,7 +17,7 @@ import {
   CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan,
   RoadmapNode,
 } from "@/lib/roadmap-types"
-import { formatVND } from "@/lib/format"
+import { formatVND, formatNumber } from "@/lib/format"
 
 // ============================================================
 // Constants
@@ -351,10 +351,10 @@ export default function PlanWizardPage() {
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    type="number"
-                    placeholder="VD: 5000000000"
-                    value={revenue}
-                    onChange={(e) => setRevenue(e.target.value)}
+                    type="text"
+                    placeholder="VD: 5.000.000.000"
+                    value={revenue ? formatNumber(Number(String(revenue).replace(/\D/g, ''))) : ''}
+                    onChange={(e) => setRevenue(e.target.value.replace(/\D/g, ''))}
                     className="pl-10 h-11 text-sm"
                   />
                 </div>
@@ -574,9 +574,9 @@ export default function PlanWizardPage() {
                             </div>
                             {/* Editable % */}
                             <input
-                              type="number"
-                              value={line.percent}
-                              onChange={(e) => handleBudgetChange(key, parseFloat(e.target.value) || 0)}
+                              type="text"
+                              value={line.percent ? formatNumber(Number(String(line.percent).replace(/\D/g, ''))) : ''}
+                              onChange={(e) => handleBudgetChange(key, parseFloat(e.target.value.replace(/\D/g, '')) || 0)}
                               className="w-14 h-7 text-xs font-bold text-center rounded-lg border border-border bg-background focus:ring-2 focus:ring-primary focus:outline-none"
                             />
                             <span className="text-[10px] text-muted-foreground">%</span>
@@ -796,16 +796,16 @@ export default function PlanWizardPage() {
                           <div>
                             <label className="text-[10px] font-bold text-muted-foreground uppercase">Số người</label>
                             <Input
-                              type="number" value={dept.headcount}
-                              onChange={(e) => handleDeptChange(idx, "headcount", parseInt(e.target.value) || 1)}
+                              type="text" value={dept.headcount ? formatNumber(Number(String(dept.headcount).replace(/\D/g, ''))) : ''}
+                              onChange={(e) => handleDeptChange(idx, "headcount", parseInt(e.target.value.replace(/\D/g, '')) || 1)}
                               className="h-8 text-xs mt-0.5"
                             />
                           </div>
                           <div>
                             <label className="text-[10px] font-bold text-muted-foreground uppercase">Lương TB (VNĐ)</label>
                             <Input
-                              type="number" value={dept.avgSalary}
-                              onChange={(e) => handleDeptChange(idx, "avgSalary", parseInt(e.target.value) || 0)}
+                              type="text" value={dept.avgSalary ? formatNumber(Number(String(dept.avgSalary).replace(/\D/g, ''))) : ''}
+                              onChange={(e) => handleDeptChange(idx, "avgSalary", parseInt(e.target.value.replace(/\D/g, '')) || 0)}
                               className="h-8 text-xs mt-0.5"
                             />
                           </div>

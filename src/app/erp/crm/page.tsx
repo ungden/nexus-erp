@@ -18,7 +18,7 @@ import {
   Receivable,
   Payable,
 } from '@/context/AppContext';
-import { formatVND } from '@/lib/format';
+import { formatVND, formatNumber } from '@/lib/format';
 
 // ─── Kanban stage config ────────────────────────────────────
 const stages: { name: Stage; color: string }[] = [
@@ -754,13 +754,13 @@ function PipelineTab({
                   </label>
                   <input
                     required
-                    type="number"
+                    type="text"
                     className={inputCls}
-                    value={newDeal.amount || ''}
+                    value={newDeal.amount ? formatNumber(Number(String(newDeal.amount).replace(/\D/g, ''))) : ''}
                     onChange={(e) =>
-                      setNewDeal((p) => ({ ...p, amount: Number(e.target.value) }))
+                      setNewDeal((p) => ({ ...p, amount: Number(e.target.value.replace(/\D/g, '')) }))
                     }
-                    placeholder="VD: 150000000"
+                    placeholder="VD: 150.000.000"
                   />
                 </div>
                 <div>

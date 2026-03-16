@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Search, Plus, Mail, X, Wallet, TrendingUp, AlertCircle, ChevronRight, ChevronDown } from 'lucide-react';
 import { useAppContext, Employee } from '@/context/AppContext';
-import { formatVND } from '@/lib/format';
+import { formatVND, formatNumber } from '@/lib/format';
 
 const OrgNode = ({ employee, allEmployees, level = 0 }: { employee: Employee, allEmployees: Employee[], level?: number }) => {
   const [expanded, setExpanded] = useState(true);
@@ -336,11 +336,11 @@ export default function HRM() {
                   <label className="block text-sm font-medium text-foreground/90 mb-1">Lương cơ bản (VNĐ)</label>
                   <input 
                     required
-                    type="number" 
+                    type="text" 
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    value={newEmployee.baseSalary || ''}
-                    onChange={e => setNewEmployee({...newEmployee, baseSalary: Number(e.target.value)})}
-                    placeholder="VD: 15000000"
+                    value={newEmployee.baseSalary ? formatNumber(Number(String(newEmployee.baseSalary).replace(/\D/g, ''))) : ''}
+                    onChange={e => setNewEmployee({...newEmployee, baseSalary: Number(e.target.value.replace(/\D/g, ''))})}
+                    placeholder="VD: 15.000.000"
                   />
                 </div>
                 <div>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Target, TrendingUp, Award, BarChart3, ChevronRight, X, Trash2 } from 'lucide-react';
 import { useAppContext, KPI as AppKPI, KpiStatus } from '@/context/AppContext';
-import { formatVND } from '@/lib/format';
+import { formatVND, formatNumber } from '@/lib/format';
 
 export default function KPI() {
   const { kpis, setKpis } = useAppContext();
@@ -166,22 +166,22 @@ export default function KPI() {
                   <label className="block text-sm font-medium text-foreground/90 mb-1">Mục tiêu cần đạt</label>
                   <input 
                     required
-                    type="number" 
+                    type="text" 
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    value={newKpi.target || ''}
-                    onChange={e => setNewKpi({...newKpi, target: Number(e.target.value)})}
-                    placeholder="VD: 5000000000"
+                    value={newKpi.target ? formatNumber(Number(String(newKpi.target).replace(/\D/g, ''))) : ''}
+                    onChange={e => setNewKpi({...newKpi, target: Number(e.target.value.replace(/\D/g, ''))})}
+                    placeholder="VD: 5.000.000.000"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1">Hiện tại</label>
                   <input 
                     required
-                    type="number" 
+                    type="text" 
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    value={newKpi.current || ''}
-                    onChange={e => setNewKpi({...newKpi, current: Number(e.target.value)})}
-                    placeholder="VD: 1000000000"
+                    value={newKpi.current ? formatNumber(Number(String(newKpi.current).replace(/\D/g, ''))) : ''}
+                    onChange={e => setNewKpi({...newKpi, current: Number(e.target.value.replace(/\D/g, ''))})}
+                    placeholder="VD: 1.000.000.000"
                   />
                 </div>
               </div>

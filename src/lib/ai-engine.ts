@@ -317,7 +317,7 @@ export function expandMonth(node: RoadmapNode): RoadmapNode[] {
   });
 }
 
-export function expandWeek(node: RoadmapNode): RoadmapNode[] {
+export function expandWeek(node: RoadmapNode, profile: CompanyProfile, board: BoardAnalysis, employees?: EmployeeBasic[]): RoadmapNode[] {
   const weekMatch = node.title.match(/\((\d+)-\d+\/(\d+)\)/);
   const startDay = parseInt(weekMatch?.[1] || '1');
   const monthNum = parseInt(weekMatch?.[2] || '1');
@@ -329,7 +329,8 @@ export function expandWeek(node: RoadmapNode): RoadmapNode[] {
     const dExp = Math.round(node.expense / 5);
     const year = new Date().getFullYear();
     const isoDate = `${year}-${String(monthNum).padStart(2, '0')}-${String(Math.min(day, 28)).padStart(2, '0')}`;
-    return {
+    
+    const dayNode: RoadmapNode = {
       id: rid(), level: 'day' as const,
       title: `${name} (${day}/${monthNum})`,
       description: `Công việc ngày ${day}/${monthNum}`,
@@ -339,6 +340,11 @@ export function expandWeek(node: RoadmapNode): RoadmapNode[] {
       kpis: [],
       children: undefined, isExpanded: false,
     };
+    
+    dayNode.children = expandDay(dayNode, profile, board, employees);
+    dayNode.isExpanded = true;
+    
+    return dayNode;
   });
 }
 
@@ -403,7 +409,7 @@ export function expandNode(
   switch (node.level) {
     case 'quarter': return expandQuarter(node, profile, board);
     case 'month': return expandMonth(node);
-    case 'week': return expandWeek(node);
+    case 'week': return expandWeek(node, profile, board, employees);
     case 'day': return expandDay(node, profile, board, employees);
     default: return [];
   }

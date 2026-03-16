@@ -28,7 +28,7 @@ import {
   Cell
 } from 'recharts';
 import { useAppContext } from '@/context/AppContext';
-import { formatVND } from '@/lib/format';
+import { formatVND, formatNumber } from '@/lib/format';
 import Link from 'next/link';
 
 const defaultRevenueData = [
@@ -199,11 +199,10 @@ export default function Dashboard() {
           <div className="flex items-center space-x-3 bg-card p-2 rounded-lg border border-primary/30 shadow-sm">
             <label className="text-xs md:text-sm font-medium text-foreground/90 whitespace-nowrap">Mục tiêu DT:</label>
             <input 
-              type="number" 
+              type="text" 
               className="w-32 md:w-40 px-3 py-1.5 border border-border rounded-md focus:ring-primary/50 focus:border-primary font-semibold text-primary/90 text-sm"
-              value={targetRevenue}
-              onChange={(e) => setTargetRevenue(Number(e.target.value))}
-              step="100000000"
+              value={targetRevenue ? formatNumber(Number(String(targetRevenue).replace(/\D/g, ''))) : ''}
+              onChange={(e) => setTargetRevenue(Number(e.target.value.replace(/\D/g, '')))}
             />
             <span className="text-xs md:text-sm font-medium text-muted-foreground">VNĐ</span>
           </div>
