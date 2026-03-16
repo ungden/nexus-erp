@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { Roadmap } from '@/lib/roadmap-types';
+import { supabase } from '@/lib/supabase';
 
 // Types
 export type Stage = 'Tiếp cận' | 'Đàm phán' | 'Chốt sale' | 'Thất bại';
@@ -146,124 +147,464 @@ interface AppState {
   setReceivables: React.Dispatch<React.SetStateAction<Receivable[]>>;
   payables: Payable[];
   setPayables: React.Dispatch<React.SetStateAction<Payable[]>>;
+  isLoading: boolean;
 }
 
-const initialEmployees: Employee[] = [
-  { id: 1, name: 'Nguyễn Văn A', role: 'Giám đốc (CEO)', department: 'Ban Giám đốc', email: 'a.nguyen@company.com', phone: '0901234567', status: 'Đang làm việc', joinDate: '01/01/2020', baseSalary: 50000000, managerId: null },
-  { id: 2, name: 'Trần Thị B', role: 'Trưởng phòng Marketing', department: 'Marketing', email: 'b.tran@company.com', phone: '0912345678', status: 'Đang làm việc', joinDate: '15/03/2021', baseSalary: 30000000, managerId: 1 },
-  { id: 3, name: 'Lê Văn C', role: 'Chuyên viên Nhân sự', department: 'HR', email: 'c.le@company.com', phone: '0923456789', status: 'Đang làm việc', joinDate: '10/05/2022', baseSalary: 15000000, managerId: 1 },
-  { id: 4, name: 'Phạm Thị D', role: 'Kế toán trưởng', department: 'Finance', email: 'd.pham@company.com', phone: '0934567890', status: 'Đang làm việc', joinDate: '20/08/2019', baseSalary: 25000000, managerId: 1 },
-  { id: 5, name: 'Hoàng Văn E', role: 'Lập trình viên', department: 'IT', email: 'e.hoang@company.com', phone: '0945678901', status: 'Đang làm việc', joinDate: '05/11/2023', baseSalary: 20000000, managerId: 1 },
-  { id: 6, name: 'Đinh Thị F', role: 'Nhân viên Content', department: 'Marketing', email: 'f.dinh@company.com', phone: '0956789012', status: 'Đang làm việc', joinDate: '01/02/2024', baseSalary: 12000000, managerId: 2 },
-];
+// ─── DB ↔ TS Mappers ─────────────────────────────────────────
 
-const initialDeals: Deal[] = [
-  { id: '1', title: 'Hợp đồng phần mềm ERP', company: 'Công ty TNHH ABC', amount: 150000000, stage: 'Tiếp cận', date: '12/10/2023', customerId: 'c1' },
-  { id: '2', title: 'Tư vấn chiến lược Marketing', company: 'Tập đoàn XYZ', amount: 80000000, stage: 'Tiếp cận', date: '15/10/2023', customerId: 'c2' },
-  { id: '3', title: 'Thiết kế Website E-commerce', company: 'Cửa hàng Thời trang M', amount: 45000000, stage: 'Đàm phán', date: '10/10/2023', customerId: 'c4' },
-  { id: '4', title: 'Dịch vụ SEO tổng thể', company: 'Nha khoa Nụ Cười', amount: 120000000, stage: 'Chốt sale', date: '05/10/2023', customerId: 'c1' },
-  { id: '5', title: 'Triển khai CRM', company: 'Công ty BĐS Hưng Thịnh', amount: 350000000, stage: 'Chốt sale', date: '01/10/2023', customerId: 'c2' },
-];
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-const initialTasks: Task[] = [
-  { id: '1', title: 'Chuẩn bị báo cáo tài chính Q3', assigneeId: 4, dueDate: '15/10/2023', priority: 'high', status: 'todo', department: 'Finance' },
-  { id: '2', title: 'Gửi email marketing chiến dịch mới', assigneeId: 6, dueDate: '12/10/2023', priority: 'medium', status: 'in-progress', department: 'Marketing' },
-  { id: '3', title: 'Phỏng vấn ứng viên Sales', assigneeId: 3, dueDate: '10/10/2023', priority: 'high', status: 'done', department: 'HR' },
-];
+function mapEmployee(row: any): Employee {
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role,
+    department: row.department,
+    email: row.email,
+    phone: row.phone,
+    status: row.status,
+    joinDate: row.join_date,
+    baseSalary: row.base_salary,
+    managerId: row.manager_id,
+  };
+}
 
-const initialKpis: KPI[] = [
-  { id: 1, title: 'Doanh thu Q4/2023', target: 5000000000, current: 3500000000, progress: 70, status: 'on-track', department: 'Sales' },
-  { id: 2, title: 'Tỷ lệ chuyển đổi Lead', target: 25, current: 18, progress: 72, status: 'at-risk', department: 'Marketing' },
-  { id: 3, title: 'Tuyển dụng nhân sự mới', target: 10, current: 8, progress: 80, status: 'on-track', department: 'HR' },
-];
+function toDbEmployee(emp: Employee): Record<string, unknown> {
+  return {
+    id: emp.id,
+    name: emp.name,
+    role: emp.role,
+    department: emp.department,
+    email: emp.email,
+    phone: emp.phone,
+    status: emp.status,
+    join_date: emp.joinDate,
+    base_salary: emp.baseSalary,
+    manager_id: emp.managerId,
+  };
+}
 
-const initialPayrolls: PayrollRecord[] = [
-  { id: 1, employeeId: 1, month: '10/2023', base: 50000000, commission: 15000000, kpiBonus: 5000000, deduction: 1000000, total: 69000000, status: 'Đã duyệt' },
-  { id: 2, employeeId: 2, month: '10/2023', base: 30000000, commission: 0, kpiBonus: 3000000, deduction: 0, total: 33000000, status: 'Chờ duyệt' },
-];
+function mapDeal(row: any): Deal {
+  return {
+    id: row.id,
+    title: row.title,
+    company: row.company,
+    amount: row.amount,
+    stage: row.stage,
+    date: row.date,
+    customerId: row.customer_id ?? undefined,
+  };
+}
 
-const initialExpenses: Expense[] = [
-  { id: 1, title: 'Quảng cáo Facebook', amount: 50000000, category: 'mkt', date: '05/10/2023' },
-  { id: 2, title: 'Sự kiện ra mắt sản phẩm', amount: 110000000, category: 'mkt', date: '12/10/2023' },
-  { id: 3, title: 'Thuê văn phòng', amount: 30000000, category: 'ops', date: '01/10/2023' },
-  { id: 4, title: 'Chi phí mua hàng', amount: 150000000, category: 'cogs', date: '02/10/2023' },
-];
+function toDbDeal(d: Deal): Record<string, unknown> {
+  return {
+    id: d.id,
+    title: d.title,
+    company: d.company,
+    amount: d.amount,
+    stage: d.stage,
+    date: d.date,
+    customer_id: d.customerId ?? null,
+  };
+}
 
-const initialCustomers: Customer[] = [
-  { id: 'c1', name: 'Công ty TNHH ABC', type: 'B2B', company: 'Công ty TNHH ABC', taxId: '0123456789', phone: '028-1234-5678', email: 'info@abc.vn', contactPerson: 'Anh Minh', address: '123 Nguyễn Huệ, Q.1, TP.HCM', createdAt: '2024-01-15' },
-  { id: 'c2', name: 'Tập đoàn XYZ', type: 'B2B', company: 'Tập đoàn XYZ', taxId: '9876543210', phone: '024-8765-4321', email: 'contact@xyz.com', contactPerson: 'Chị Lan', address: '456 Lý Thường Kiệt, Hà Nội', createdAt: '2024-02-20' },
-  { id: 'c3', name: 'Nguyễn Thị Hoa', type: 'B2C', phone: '0901234567', email: 'hoa.nguyen@gmail.com', address: '789 Trần Hưng Đạo, Đà Nẵng', createdAt: '2024-03-10' },
-  { id: 'c4', name: 'Cửa hàng Thời trang M', type: 'B2B', company: 'Cửa hàng Thời trang M', phone: '0912345678', email: 'info@fashionm.vn', contactPerson: 'Anh Tuấn', createdAt: '2024-04-05' },
-  { id: 'c5', name: 'Trần Văn Nam', type: 'B2C', phone: '0987654321', email: 'nam.tran@yahoo.com', createdAt: '2024-05-18' },
-];
+function mapTask(row: any): Task {
+  return {
+    id: row.id,
+    title: row.title,
+    assigneeId: row.assignee_id,
+    dueDate: row.due_date,
+    priority: row.priority,
+    status: row.status,
+    department: row.department,
+  };
+}
 
-const initialPartners: Partner[] = [
-  { id: 'p1', name: 'Công ty TNHH Cung ứng Vật tư', type: 'Nhà cung cấp', contactPerson: 'Anh Đức', phone: '028-9999-8888', email: 'duc@vattu.vn', notes: 'NCC vật tư chính', createdAt: '2024-01-01' },
-  { id: 'p2', name: 'Agency Marketing Pro', type: 'Đối tác', contactPerson: 'Chị Mai', phone: '0977-888-999', email: 'mai@mktpro.vn', notes: 'Đối tác marketing chiến lược', createdAt: '2024-02-15' },
-];
+function toDbTask(t: Task): Record<string, unknown> {
+  return {
+    id: t.id,
+    title: t.title,
+    assignee_id: t.assigneeId,
+    due_date: t.dueDate,
+    priority: t.priority,
+    status: t.status,
+    department: t.department,
+  };
+}
 
-const initialReceivables: Receivable[] = [
-  { id: 'r1', customerId: 'c1', dealId: '4', amount: 120000000, paidAmount: 60000000, dueDate: '2024-12-31', status: 'Thu một phần' },
-  { id: 'r2', customerId: 'c2', dealId: '5', amount: 350000000, paidAmount: 0, dueDate: '2024-11-30', status: 'Chưa thu' },
-];
+function mapKpi(row: any): KPI {
+  return {
+    id: row.id,
+    title: row.title,
+    target: row.target,
+    current: row.current,
+    progress: row.progress,
+    status: row.status,
+    department: row.department,
+  };
+}
 
-const initialPayables: Payable[] = [
-  { id: 'pa1', partnerId: 'p1', amount: 150000000, paidAmount: 150000000, dueDate: '2024-10-15', description: 'Mua vật tư tháng 10', status: 'Đã trả đủ' },
-  { id: 'pa2', partnerId: 'p1', amount: 80000000, paidAmount: 30000000, dueDate: '2024-12-01', description: 'Mua vật tư tháng 11', status: 'Trả một phần' },
-];
+function toDbKpi(k: KPI): Record<string, unknown> {
+  return {
+    id: k.id,
+    title: k.title,
+    target: k.target,
+    current: k.current,
+    progress: k.progress,
+    status: k.status,
+    department: k.department,
+  };
+}
 
-const AppContext = createContext<AppState | undefined>(undefined);
+function mapPayroll(row: any): PayrollRecord {
+  return {
+    id: row.id,
+    employeeId: row.employee_id,
+    month: row.month,
+    base: row.base,
+    commission: row.commission,
+    kpiBonus: row.kpi_bonus,
+    deduction: row.deduction,
+    total: row.total,
+    status: row.status,
+  };
+}
 
-const STORAGE_KEY = 'nexus-erp-state';
+function toDbPayroll(p: PayrollRecord): Record<string, unknown> {
+  return {
+    id: p.id,
+    employee_id: p.employeeId,
+    month: p.month,
+    base: p.base,
+    commission: p.commission,
+    kpi_bonus: p.kpiBonus,
+    deduction: p.deduction,
+    total: p.total,
+    status: p.status,
+  };
+}
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    const stored = localStorage.getItem(`${STORAGE_KEY}-${key}`);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch {
-    return fallback;
+function mapExpense(row: any): Expense {
+  return {
+    id: row.id,
+    title: row.title,
+    amount: row.amount,
+    category: row.category,
+    date: row.date,
+  };
+}
+
+function toDbExpense(e: Expense): Record<string, unknown> {
+  return {
+    id: e.id,
+    title: e.title,
+    amount: e.amount,
+    category: e.category,
+    date: e.date,
+  };
+}
+
+function mapCustomer(row: any): Customer {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    company: row.company ?? undefined,
+    taxId: row.tax_id ?? undefined,
+    phone: row.phone,
+    email: row.email,
+    address: row.address ?? undefined,
+    contactPerson: row.contact_person ?? undefined,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function toDbCustomer(c: Customer): Record<string, unknown> {
+  return {
+    id: c.id,
+    name: c.name,
+    type: c.type,
+    company: c.company ?? null,
+    tax_id: c.taxId ?? null,
+    phone: c.phone,
+    email: c.email,
+    address: c.address ?? null,
+    contact_person: c.contactPerson ?? null,
+    notes: c.notes ?? null,
+    created_at: c.createdAt,
+  };
+}
+
+function mapPartner(row: any): Partner {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    contactPerson: row.contact_person,
+    phone: row.phone,
+    email: row.email,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function toDbPartner(p: Partner): Record<string, unknown> {
+  return {
+    id: p.id,
+    name: p.name,
+    type: p.type,
+    contact_person: p.contactPerson,
+    phone: p.phone,
+    email: p.email,
+    notes: p.notes ?? null,
+    created_at: p.createdAt,
+  };
+}
+
+function mapReceivable(row: any): Receivable {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    dealId: row.deal_id,
+    amount: row.amount,
+    paidAmount: row.paid_amount,
+    dueDate: row.due_date,
+    status: row.status,
+  };
+}
+
+function toDbReceivable(r: Receivable): Record<string, unknown> {
+  return {
+    id: r.id,
+    customer_id: r.customerId,
+    deal_id: r.dealId,
+    amount: r.amount,
+    paid_amount: r.paidAmount,
+    due_date: r.dueDate,
+    status: r.status,
+  };
+}
+
+function mapPayable(row: any): Payable {
+  return {
+    id: row.id,
+    partnerId: row.partner_id,
+    amount: row.amount,
+    paidAmount: row.paid_amount,
+    dueDate: row.due_date,
+    description: row.description,
+    status: row.status,
+  };
+}
+
+function toDbPayable(p: Payable): Record<string, unknown> {
+  return {
+    id: p.id,
+    partner_id: p.partnerId,
+    amount: p.amount,
+    paid_amount: p.paidAmount,
+    due_date: p.dueDate,
+    description: p.description,
+    status: p.status,
+  };
+}
+
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ─── Supabase sync helper ────────────────────────────────────
+
+async function syncToSupabase(table: string, rows: Record<string, unknown>[]) {
+  // Delete all existing rows, then upsert the current state
+  await supabase.from(table).delete().neq('id', -999);
+  if (rows.length > 0) {
+    await supabase.from(table).upsert(rows);
   }
 }
 
-function saveToStorage<T>(key: string, value: T) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(`${STORAGE_KEY}-${key}`, JSON.stringify(value));
-  } catch { /* quota exceeded — ignore */ }
-}
+// ─── Default finance state ───────────────────────────────────
+
+const defaultFinance: AppState['finance'] = {
+  targetRevenue: 0,
+  allocations: { cogs: 0, hr: 0, mkt: 0, ops: 0, profit: 0 },
+};
+
+// ─── Context ─────────────────────────────────────────────────
+
+const AppContext = createContext<AppState | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [deals, setDeals] = useState<Deal[]>(() => loadFromStorage('deals', initialDeals));
-  const [tasks, setTasks] = useState<Task[]>(() => loadFromStorage('tasks', initialTasks));
-  const [employees, setEmployees] = useState<Employee[]>(() => loadFromStorage('employees', initialEmployees));
-  const [kpis, setKpis] = useState<KPI[]>(() => loadFromStorage('kpis', initialKpis));
-  const [payrolls, setPayrolls] = useState<PayrollRecord[]>(() => loadFromStorage('payrolls', initialPayrolls));
-  const [expenses, setExpenses] = useState<Expense[]>(() => loadFromStorage('expenses', initialExpenses));
-  const [finance, setFinance] = useState(() => loadFromStorage('finance', {
-    targetRevenue: 1000000000,
-    allocations: { cogs: 30, hr: 25, mkt: 15, ops: 10, profit: 20 }
-  }));
-  const [roadmap, setRoadmapState] = useState<Roadmap | null>(() => loadFromStorage('roadmap', null));
-  const [customers, setCustomers] = useState<Customer[]>(() => loadFromStorage('customers', initialCustomers));
-  const [partners, setPartners] = useState<Partner[]>(() => loadFromStorage('partners', initialPartners));
-  const [receivables, setReceivables] = useState<Receivable[]>(() => loadFromStorage('receivables', initialReceivables));
-  const [payables, setPayables] = useState<Payable[]>(() => loadFromStorage('payables', initialPayables));
+  // isLoaded gates sync-to-DB effects so they don't fire during initial fetch
+  const isLoaded = useRef(false);
 
-  // Persist to localStorage on every change
-  useEffect(() => { saveToStorage('deals', deals); }, [deals]);
-  useEffect(() => { saveToStorage('tasks', tasks); }, [tasks]);
-  useEffect(() => { saveToStorage('employees', employees); }, [employees]);
-  useEffect(() => { saveToStorage('kpis', kpis); }, [kpis]);
-  useEffect(() => { saveToStorage('payrolls', payrolls); }, [payrolls]);
-  useEffect(() => { saveToStorage('expenses', expenses); }, [expenses]);
-  useEffect(() => { saveToStorage('finance', finance); }, [finance]);
-  useEffect(() => { saveToStorage('roadmap', roadmap); }, [roadmap]);
-  useEffect(() => { saveToStorage('customers', customers); }, [customers]);
-  useEffect(() => { saveToStorage('partners', partners); }, [partners]);
-  useEffect(() => { saveToStorage('receivables', receivables); }, [receivables]);
-  useEffect(() => { saveToStorage('payables', payables); }, [payables]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [kpis, setKpis] = useState<KPI[]>([]);
+  const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [finance, setFinance] = useState<AppState['finance']>(defaultFinance);
+  const [roadmap, setRoadmapState] = useState<Roadmap | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [receivables, setReceivables] = useState<Receivable[]>([]);
+  const [payables, setPayables] = useState<Payable[]>([]);
 
+  // ── Load everything from Supabase on mount ──────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAll() {
+      const [
+        { data: empRows },
+        { data: dealRows },
+        { data: taskRows },
+        { data: kpiRows },
+        { data: payrollRows },
+        { data: expenseRows },
+        { data: customerRows },
+        { data: partnerRows },
+        { data: receivableRows },
+        { data: payableRows },
+        { data: financeRows },
+        { data: roadmapRows },
+      ] = await Promise.all([
+        supabase.from('employees').select('*'),
+        supabase.from('deals').select('*'),
+        supabase.from('tasks').select('*'),
+        supabase.from('kpis').select('*'),
+        supabase.from('payrolls').select('*'),
+        supabase.from('expenses').select('*'),
+        supabase.from('customers').select('*'),
+        supabase.from('partners').select('*'),
+        supabase.from('receivables').select('*'),
+        supabase.from('payables').select('*'),
+        supabase.from('finance_settings').select('*').eq('id', 1),
+        supabase.from('roadmaps').select('*').eq('id', 1),
+      ]);
+
+      if (cancelled) return;
+
+      setEmployees(empRows?.map(mapEmployee) ?? []);
+      setDeals(dealRows?.map(mapDeal) ?? []);
+      setTasks(taskRows?.map(mapTask) ?? []);
+      setKpis(kpiRows?.map(mapKpi) ?? []);
+      setPayrolls(payrollRows?.map(mapPayroll) ?? []);
+      setExpenses(expenseRows?.map(mapExpense) ?? []);
+      setCustomers(customerRows?.map(mapCustomer) ?? []);
+      setPartners(partnerRows?.map(mapPartner) ?? []);
+      setReceivables(receivableRows?.map(mapReceivable) ?? []);
+      setPayables(payableRows?.map(mapPayable) ?? []);
+
+      // Finance settings (single row)
+      if (financeRows && financeRows.length > 0) {
+        const f = financeRows[0];
+        setFinance({
+          targetRevenue: f.target_revenue ?? 0,
+          allocations: {
+            cogs: f.alloc_cogs ?? 0,
+            hr: f.alloc_hr ?? 0,
+            mkt: f.alloc_mkt ?? 0,
+            ops: f.alloc_ops ?? 0,
+            profit: f.alloc_profit ?? 0,
+          },
+        });
+      }
+
+      // Roadmap (single JSONB row)
+      if (roadmapRows && roadmapRows.length > 0 && roadmapRows[0].data) {
+        setRoadmapState(roadmapRows[0].data as Roadmap);
+      }
+
+      // Mark loaded — enables sync-to-DB effects
+      isLoaded.current = true;
+      setIsLoading(false);
+    }
+
+    loadAll();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Sync state → Supabase on every change (after initial load) ──
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('employees', employees.map(toDbEmployee));
+  }, [employees]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('deals', deals.map(toDbDeal));
+  }, [deals]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('tasks', tasks.map(toDbTask));
+  }, [tasks]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('kpis', kpis.map(toDbKpi));
+  }, [kpis]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('payrolls', payrolls.map(toDbPayroll));
+  }, [payrolls]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('expenses', expenses.map(toDbExpense));
+  }, [expenses]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('customers', customers.map(toDbCustomer));
+  }, [customers]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('partners', partners.map(toDbPartner));
+  }, [partners]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('receivables', receivables.map(toDbReceivable));
+  }, [receivables]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    syncToSupabase('payables', payables.map(toDbPayable));
+  }, [payables]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    supabase.from('finance_settings').upsert({
+      id: 1,
+      target_revenue: finance.targetRevenue,
+      alloc_cogs: finance.allocations.cogs,
+      alloc_hr: finance.allocations.hr,
+      alloc_mkt: finance.allocations.mkt,
+      alloc_ops: finance.allocations.ops,
+      alloc_profit: finance.allocations.profit,
+    });
+  }, [finance]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    if (roadmap) {
+      supabase.from('roadmaps').upsert({
+        id: 1,
+        data: roadmap,
+        updated_at: new Date().toISOString(),
+      });
+    } else {
+      supabase.from('roadmaps').delete().eq('id', 1);
+    }
+  }, [roadmap]);
+
+  // ── Roadmap setter (maintains same API) ─────────────────────
   const setRoadmap = (rm: Roadmap | null) => setRoadmapState(rm);
 
   return (
@@ -280,6 +621,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       partners, setPartners,
       receivables, setReceivables,
       payables, setPayables,
+      isLoading,
     }}>
       {children}
     </AppContext.Provider>
