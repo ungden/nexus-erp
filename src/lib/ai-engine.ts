@@ -397,7 +397,45 @@ export function expandDay(node: RoadmapNode, profile: CompanyProfile, board: Boa
 }
 
 // ============================================================
-// DISPATCHER
+// BATCH EXPAND — Expand all children of a given level at once
+// ============================================================
+
+/** Expand all 4 quarters → 12 months total */
+export function batchExpandQuarters(tree: RoadmapNode, profile: CompanyProfile, board: BoardAnalysis): RoadmapNode {
+  if (!tree.children) return tree;
+  return {
+    ...tree,
+    children: tree.children.map(q => ({
+      ...q,
+      children: expandQuarter(q, profile, board),
+      isExpanded: true,
+    })),
+  };
+}
+
+/** Expand all 12 months → weeks → days → tasks */
+export function batchExpandMonths(tree: RoadmapNode, profile: CompanyProfile, board: BoardAnalysis, employees?: EmployeeBasic[]): RoadmapNode {
+  if (!tree.children) return tree;
+  return {
+    ...tree,
+    children: tree.children.map(q => {
+      if (!q.children) return q;
+      return {
+        ...q,
+        children: q.children.map(m => {
+          const weeks = expandMonth(m).map(w => {
+            const days = expandWeek(w, profile, board, employees);
+            return { ...w, children: days, isExpanded: true };
+          });
+          return { ...m, children: weeks, isExpanded: true };
+        }),
+      };
+    }),
+  };
+}
+
+// ============================================================
+// DISPATCHER (single node)
 // ============================================================
 
 export function expandNode(
