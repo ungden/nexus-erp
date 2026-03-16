@@ -1,6 +1,6 @@
 // ============================================================
-// Gemini 2.5 Pro Integration — NexusERP AI Brain
-// Khi có GEMINI_API_KEY → gọi Gemini thật
+// Gemini 3.1 Pro Preview — NexusERP AI Brain
+// Khi có GEMINI_API_KEY → gọi Gemini 3.1 Pro thật
 // Khi không có key → fallback về placeholder engine
 // ============================================================
 
@@ -9,7 +9,7 @@ import { CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan, Roadma
 import { generateBoardAnalysis as fallbackBoard, generateRoadmapTree as fallbackTree } from './ai-engine';
 import { formatVND } from './format';
 
-const MODEL_NAME = 'gemini-2.5-pro-preview-06-05';
+const MODEL_NAME = 'gemini-3.1-pro-preview';
 
 function getGenAI(): GoogleGenerativeAI | null {
   const key = process.env.GEMINI_API_KEY;
@@ -24,8 +24,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
   const model = genAI.getGenerativeModel({
     model: MODEL_NAME,
     generationConfig: {
-      temperature: 0.7,
-      topP: 0.95,
+      temperature: 1.0,  // Gemini 3 khuyến nghị giữ default 1.0
       maxOutputTokens: 8192,
       responseMimeType: 'application/json',
     },
