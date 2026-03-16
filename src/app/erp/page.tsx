@@ -40,7 +40,7 @@ const defaultRevenueData = [
   { name: 'T6', actual: 950, target: 1000 },
 ];
 
-const COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6', '#10b981'];
+const COLORS = ['#818cf8', '#6366f1', '#4f46e5', '#4338ca', '#10b981'];
 
 const fadeIn = {
   hidden: { opacity: 0, y: 12 },
@@ -132,7 +132,7 @@ export default function Dashboard() {
       value: actualRevenue, 
       icon: Wallet,
       iconColor: 'text-primary',
-      iconBg: 'bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20',
+      iconBg: 'bg-primary/10 border border-primary/20',
       trend: revenuePercent >= 50 ? 'up' : 'down',
       trendValue: `${revenuePercent}% Mục tiêu`,
       trendPositive: actualRevenue >= targetRevenue
@@ -143,7 +143,7 @@ export default function Dashboard() {
       value: actualHRCost, 
       icon: Users,
       iconColor: 'text-blue-600',
-      iconBg: 'bg-gradient-to-br from-blue-100 to-blue-50 border border-blue-200',
+      iconBg: 'bg-blue-50/80 border border-blue-200',
       trend: actualHRCost <= hrBudget ? 'up' : 'down',
       trendValue: actualHRCost <= hrBudget ? `Dư ${formatVND(hrBudget - actualHRCost)}` : `Vượt ${formatVND(actualHRCost - hrBudget)}`,
       trendPositive: actualHRCost <= hrBudget
@@ -154,7 +154,7 @@ export default function Dashboard() {
       value: actualMktCost, 
       icon: TrendingUp,
       iconColor: 'text-amber-500',
-      iconBg: 'bg-gradient-to-br from-amber-100 to-amber-50 border border-amber-200',
+      iconBg: 'bg-amber-50/80 border border-amber-200',
       trend: actualMktCost <= mktBudget ? 'up' : 'down',
       trendValue: actualMktCost <= mktBudget ? `Dư ${formatVND(mktBudget - actualMktCost)}` : `Vượt ${formatVND(actualMktCost - mktBudget)}`,
       trendPositive: actualMktCost <= mktBudget
@@ -165,7 +165,7 @@ export default function Dashboard() {
       value: actualProfit, 
       icon: DollarSign,
       iconColor: 'text-emerald-600',
-      iconBg: 'bg-gradient-to-br from-emerald-100 to-emerald-50 border border-emerald-200',
+      iconBg: 'bg-emerald-50/80 border border-emerald-200',
       trend: actualProfit >= 0 ? 'up' : 'down',
       trendValue: `Target: ${formatVND(profitTarget)}`,
       trendPositive: actualProfit >= profitTarget
@@ -311,7 +311,7 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
         >
-          <div className="bg-emerald-50 p-4 md:p-5 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="bg-emerald-50/50 p-4 md:p-5 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-base md:text-lg font-bold text-emerald-800 flex items-center gap-2">
                 <MapPin className="w-5 h-5" />
@@ -377,8 +377,8 @@ export default function Dashboard() {
           
           <div className="flex items-center gap-5 relative z-10">
             <div className="relative">
-              <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse-soft" />
-              <div className="p-4 bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl border border-primary/20 relative">
+              <div className="absolute inset-0 bg-primary/15 blur-xl rounded-full animate-pulse-soft" />
+              <div className="p-4 bg-primary/10 rounded-2xl border border-primary/20 relative">
                 <MapPin className="w-8 h-8 text-primary" />
               </div>
             </div>
@@ -388,7 +388,7 @@ export default function Dashboard() {
             </div>
           </div>
           <Link href="/erp/plan" className="relative z-10 shrink-0">
-            <button className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-lg shadow-primary/25 transition-all duration-300 hover:scale-105 hover:-translate-y-1">
+            <button className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-lg transition-all duration-300 hover:scale-105 hover:-translate-y-1">
               Tạo Roadmap Ngay <ChevronRight className="w-4 h-4" />
             </button>
           </Link>
@@ -409,8 +409,8 @@ export default function Dashboard() {
               <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#9ca3af" stopOpacity={0.3}/>
@@ -429,7 +429,7 @@ export default function Dashboard() {
                   }} 
                 />
                 <Area type="monotone" dataKey="target" stroke="#9ca3af" strokeDasharray="5 5" fillOpacity={1} fill="url(#colorTarget)" name="Mục tiêu" />
-                <Area type="monotone" dataKey="actual" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorActual)" name="Thực tế" />
+                <Area type="monotone" dataKey="actual" stroke="#4f46e5" strokeWidth={2} fillOpacity={1} fill="url(#colorActual)" name="Thực tế" />
               </AreaChart>
             </ResponsiveContainer>
           </div>

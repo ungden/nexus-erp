@@ -42,12 +42,12 @@ const BUDGET_LABELS: Record<string, string> = {
   operations: "Vận hành (Ops)",
   profit: "Lợi nhuận",
 }
-const BUDGET_COLORS: Record<string, string> = {
-  cogs: "bg-orange-500",
-  hr: "bg-blue-500",
-  marketing: "bg-violet-500",
-  operations: "bg-emerald-500",
-  profit: "bg-amber-400",
+const BUDGET_HEX: Record<string, string> = {
+  cogs: "#818cf8",       // indigo-400
+  hr: "#6366f1",         // indigo-500
+  marketing: "#4f46e5",  // indigo-600
+  operations: "#4338ca", // indigo-700
+  profit: "#10b981",     // emerald-500
 }
 
 type Screen = "input" | "loading" | "results"
@@ -62,25 +62,27 @@ function CashflowHealth({ revenue, expense }: { revenue: number; expense: number
   const isHealthy = margin >= 10
   const isWarning = margin >= 0 && margin < 10
   return (
-    <div className={`rounded-xl border p-3 flex items-center gap-3 text-sm ${
-      isHealthy ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800"
-        : isWarning ? "bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800"
-        : "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800"
+    <div className={`rounded-xl border p-4 flex items-center gap-3 text-sm ${
+      isHealthy ? "bg-emerald-50/80 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
+        : isWarning ? "bg-amber-50/80 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800"
+        : "bg-red-50/80 border-red-200 dark:bg-red-950/20 dark:border-red-800"
     }`}>
-      <span className="text-xl">{isHealthy ? "💚" : isWarning ? "🟡" : "🔴"}</span>
+      {isHealthy ? <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+        : isWarning ? <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+        : <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
       <div className="flex-1 min-w-0">
         <p className={`font-bold text-xs ${
-          isHealthy ? "text-emerald-700 dark:text-emerald-400"
-            : isWarning ? "text-amber-700 dark:text-amber-400"
-            : "text-red-700 dark:text-red-400"
+          isHealthy ? "text-emerald-800 dark:text-emerald-400"
+            : isWarning ? "text-amber-800 dark:text-amber-400"
+            : "text-red-800 dark:text-red-400"
         }`}>
           {isHealthy ? "Dòng tiền KHOẺ" : isWarning ? "Dòng tiền CẦN LƯU Ý" : "Dòng tiền NGUY HIỂM"}
           {" · "}Biên lợi nhuận {margin.toFixed(1)}%
         </p>
         <p className={`text-[11px] ${
-          isHealthy ? "text-emerald-600 dark:text-emerald-500"
-            : isWarning ? "text-amber-600 dark:text-amber-500"
-            : "text-red-600 dark:text-red-500"
+          isHealthy ? "text-emerald-800/70 dark:text-emerald-500"
+            : isWarning ? "text-amber-800/70 dark:text-amber-500"
+            : "text-red-800/70 dark:text-red-500"
         }`}>
           Doanh thu {formatVND(revenue)} − Chi phí {formatVND(expense)} = <strong>{formatVND(revenue - expense)}</strong>
         </p>
@@ -465,19 +467,19 @@ export default function PlanWizardPage() {
   const ceo = board.ceo
   const hr = board.hr
 
-  const tabs: { key: ResultTab; emoji: string; label: string }[] = [
-    { key: "cfo", emoji: "💰", label: "CFO: Tài chính" },
-    { key: "ceo", emoji: "👔", label: "CEO: Chiến lược" },
-    { key: "hr", emoji: "👥", label: "HR: Nhân sự" },
+  const tabs: { key: ResultTab; icon: typeof BarChart3; label: string }[] = [
+    { key: "cfo", icon: BarChart3, label: "CFO: Tài chính" },
+    { key: "ceo", icon: Target, label: "CEO: Chiến lược" },
+    { key: "hr", icon: Users, label: "HR: Nhân sự" },
   ]
 
   // Budget total percent
   const budgetTotalPercent = BUDGET_KEYS.reduce((s, k) => s + cfo.budgetAllocation[k].percent, 0)
 
   return (
-    <div className="max-w-5xl mx-auto py-6 px-4 space-y-4">
+    <div className="max-w-5xl mx-auto py-8 px-4 space-y-6">
       {/* Header */}
-      <div className="text-center space-y-1">
+      <div className="text-center space-y-2">
         <h1 className="text-xl md:text-2xl font-extrabold text-foreground tracking-tight">
           Kết quả phân tích · <span className="text-gradient">{companyName}</span>
         </h1>
@@ -490,18 +492,21 @@ export default function PlanWizardPage() {
       <CashflowHealth revenue={cashflow.revenue} expense={cashflow.expense} />
 
       {/* Tab bar */}
-      <div className="flex gap-1 p-1 bg-muted/50 rounded-xl border border-border">
-        {tabs.map((t) => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === t.key
-                ? "bg-background text-foreground shadow-sm border border-border"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span>{t.emoji}</span> {t.label}
-          </button>
-        ))}
+      <div className="flex gap-1.5 p-1.5 bg-muted/30 rounded-xl border border-border">
+        {tabs.map((t) => {
+          const Icon = t.icon
+          return (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === t.key
+                  ? "bg-primary text-white shadow-md"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" /> {t.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Tab Content */}
@@ -515,7 +520,7 @@ export default function PlanWizardPage() {
         >
           {/* ============ CFO TAB ============ */}
           {activeTab === "cfo" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* Feasibility Badge */}
               <div className="flex items-center gap-3">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${
@@ -561,15 +566,15 @@ export default function PlanWizardPage() {
                       const line = cfo.budgetAllocation[key]
                       return (
                         <div key={key} className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2.5">
                             <span className="text-xs font-medium text-foreground w-44 shrink-0 truncate">
                               {BUDGET_LABELS[key]}
                             </span>
-                            {/* Colored bar */}
+                            {/* Colored bar — monochrome indigo palette */}
                             <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full transition-all ${BUDGET_COLORS[key]}`}
-                                style={{ width: `${Math.min(line.percent, 100)}%` }}
+                                className="h-full rounded-full transition-all"
+                                style={{ width: `${Math.min(line.percent, 100)}%`, backgroundColor: BUDGET_HEX[key] }}
                               />
                             </div>
                             {/* Editable % */}
@@ -610,18 +615,18 @@ export default function PlanWizardPage() {
 
               {/* Risks */}
               <Card className="glass-card">
-                <CardContent className="p-4 space-y-2">
+                <CardContent className="p-4 space-y-3">
                   <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Rủi ro
                   </h3>
-                  <ul className="space-y-1.5">
+                  <div className="space-y-2">
                     {cfo.risks.map((risk, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-                        <span className="text-amber-500 mt-0.5">⚠</span>
-                        {risk}
-                      </li>
+                      <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-amber-50/50 border border-amber-100 dark:bg-amber-950/10 dark:border-amber-900/30">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                        <p className="text-sm text-foreground leading-relaxed">{risk}</p>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -629,7 +634,7 @@ export default function PlanWizardPage() {
 
           {/* ============ CEO TAB ============ */}
           {activeTab === "ceo" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* Vision */}
               <Card className="glass-card">
                 <CardContent className="p-4 space-y-2">
@@ -645,12 +650,14 @@ export default function PlanWizardPage() {
               </Card>
 
               {/* Quarter Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {ceo.quarterlyGoals.map((q, qi) => (
-                  <Card key={qi} className="glass-card overflow-hidden">
-                    <div className="bg-primary/5 px-4 py-2 border-b border-border flex items-center justify-between">
-                      <span className="text-xs font-bold text-primary">Quý {q.quarter}</span>
-                      <span className="text-[10px] text-muted-foreground">{formatVND(q.revenue)} doanh thu</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {ceo.quarterlyGoals.map((q, qi) => {
+                  const quarterBorders = ["border-l-indigo-400", "border-l-indigo-500", "border-l-indigo-600", "border-l-indigo-700"]
+                  return (
+                  <Card key={qi} className={`glass-card overflow-hidden border-l-[3px] ${quarterBorders[qi] || "border-l-indigo-500"}`}>
+                    <div className="bg-muted/30 px-4 py-2.5 border-b border-border flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Quý {q.quarter}</span>
+                      <span className="text-[10px] font-medium text-muted-foreground">{formatVND(q.revenue)} doanh thu</span>
                     </div>
                     <CardContent className="p-4 space-y-3">
                       {/* Theme - editable */}
@@ -716,7 +723,8 @@ export default function PlanWizardPage() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  )
+                })}
               </div>
 
               {/* Company KPIs */}
@@ -749,7 +757,7 @@ export default function PlanWizardPage() {
 
           {/* ============ HR TAB ============ */}
           {activeTab === "hr" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* Summary cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
@@ -890,7 +898,7 @@ export default function PlanWizardPage() {
       </AnimatePresence>
 
       {/* Bottom Actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-border">
+      <div className="flex items-center justify-between pt-6 border-t border-border">
         <Button variant="ghost" onClick={() => { setScreen("input"); setBoard(null) }} className="gap-2 font-semibold text-sm">
           <ArrowLeft className="w-4 h-4" /> Nhập lại thông tin
         </Button>

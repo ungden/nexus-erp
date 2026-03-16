@@ -29,38 +29,38 @@
 
 @layer base {
   :root {
-    /* Sophisticated Premium Light Theme */
-    --background: #f8fafc;
-    --foreground: #0f172a;
+    /* ====== REFINED PREMIUM PALETTE ====== */
+    /* Clean warm white — not too cold */
+    --background: #fafafa;
+    --foreground: #18181b;
     
     --card: #ffffff;
-    --card-foreground: #0f172a;
+    --card-foreground: #18181b;
     
     --popover: #ffffff;
-    --popover-foreground: #0f172a;
+    --popover-foreground: #18181b;
     
-    /* Elegant blue */
-    --primary: #3b82f6;
+    /* Indigo-based primary — richer than pure blue */
+    --primary: #4f46e5;
     --primary-foreground: #ffffff;
     
-    --secondary: #f1f5f9;
-    --secondary-foreground: #0f172a;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #18181b;
     
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
     
-    /* Vibrant violet */
-    --accent: #8b5cf6;
+    --accent: #7c3aed;
     --accent-foreground: #ffffff;
     
-    --destructive: #ef4444;
+    --destructive: #dc2626;
     --destructive-foreground: #ffffff;
     
-    --border: #e2e8f0;
-    --input: #e2e8f0;
-    --ring: #3b82f6;
+    --border: #e4e4e7;
+    --input: #e4e4e7;
+    --ring: #4f46e5;
     
-    --radius: 0.875rem;
+    --radius: 0.75rem;
   }
 }
 
@@ -79,66 +79,45 @@
   body {
     @apply bg-background text-foreground;
     line-height: 1.6;
-    background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.08), transparent),
-      radial-gradient(ellipse 60% 40% at 100% 50%, rgba(139, 92, 246, 0.05), transparent);
-    background-attachment: fixed;
+    background-image: none;
   }
 
   ::selection {
-    background: rgba(59, 130, 246, 0.2);
+    background: rgba(79, 70, 229, 0.15);
     color: var(--foreground);
   }
 
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
   }
 }
 
-/* Premium utility classes */
+/* ====== CARD SYSTEM ====== */
 @layer utilities {
   .glass {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.8);
+    background: #ffffff;
+    border: 1px solid var(--border);
   }
   
   .glass-card {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 1);
-    box-shadow:
-      0 4px 6px -1px rgba(0, 0, 0, 0.03),
-      0 10px 15px -3px rgba(0, 0, 0, 0.03),
-      0 0 0 1px rgba(0, 0, 0, 0.02);
-    border-radius: 1rem;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
   
   .glass-card:hover {
-    border-color: rgba(59, 130, 246, 0.2);
-    box-shadow:
-      0 12px 30px -8px rgba(59, 130, 246, 0.15),
-      0 8px 16px -6px rgba(59, 130, 246, 0.1),
-      0 0 0 1px rgba(59, 130, 246, 0.2);
-    transform: translateY(-2px);
+    border-color: #d4d4d8;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
   }
 
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #d946ef 100%);
+    background-image: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   }
 
-  .bg-gradient-animated {
-    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #d946ef 100%);
-    background-size: 200% 200%;
-    animation: gradientShift 5s ease infinite;
-  }
-  
   .animate-float {
     animation: float 6s ease-in-out infinite;
   }
@@ -147,89 +126,58 @@
     animation: pulseSoft 3s ease-in-out infinite;
   }
 
-  /* Counter animation helper */
   .animate-count-up {
-    animation: countUp 1s ease-out;
+    animation: countUp 0.6s ease-out;
   }
 }
 
-/* React Flow Light Theme styling */
-.react-flow__pane {
-  background-color: transparent !important;
-}
-
-.react-flow__background {
-  opacity: 0.6 !important;
-}
-
+/* ====== REACT FLOW ====== */
+.react-flow__pane { background-color: transparent !important; }
+.react-flow__background { opacity: 0.5 !important; }
 .react-flow__controls {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border: 1px solid rgba(0, 0, 0, 0.05) !important;
-  border-radius: 12px !important;
+  background: #fff !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
   overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
 }
-
 .react-flow__controls-button {
   background: transparent !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04) !important;
-  fill: #64748b !important;
-  color: #64748b !important;
+  border-bottom: 1px solid #f4f4f5 !important;
+  fill: #71717a !important;
 }
-
 .react-flow__controls-button:hover {
-  background: rgba(59, 130, 246, 0.05) !important;
-  fill: #0f172a !important;
+  background: #f4f4f5 !important;
+  fill: #18181b !important;
 }
-
 .react-flow__minimap {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border: 1px solid rgba(0, 0, 0, 0.05) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
+  background: #fff !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
+/* ====== SCROLLBAR ====== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
 
-/* Mobile responsive table */
 @media (max-width: 768px) {
-  .overflow-x-auto {
-    -webkit-overflow-scrolling: touch;
-  }
+  .overflow-x-auto { -webkit-overflow-scrolling: touch; }
 }
 
+/* ====== KEYFRAMES ====== */
 @keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
-  100% { transform: translateY(0px); }
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
 }
-
 @keyframes pulseSoft {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  50% { opacity: 0.5; }
 }
-
 @keyframes countUp {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
 }

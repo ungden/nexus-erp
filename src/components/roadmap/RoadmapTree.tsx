@@ -41,23 +41,24 @@ const NavNode = ({
         onClick={() => onSelect(node.id)}
         className={cn(
           "flex items-center gap-2 py-2 px-2.5 rounded-xl cursor-pointer transition-all duration-200 text-sm font-semibold select-none group",
-          isActive ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted text-muted-foreground hover:text-foreground"
+          isActive ? "bg-primary/10 text-primary shadow-sm" : "hover:bg-muted text-muted-foreground hover:text-foreground"
         )}
       >
         <div 
           onClick={(e) => onToggle(node.id, e)}
           className={cn(
             "w-6 h-6 flex items-center justify-center shrink-0 rounded-md hover:bg-black/10 dark:hover:bg-white/20 transition-colors",
-            isActive ? "text-primary-foreground/80 hover:text-primary-foreground" : ""
+            isActive ? "text-primary/80 hover:text-primary" : ""
           )}
         >
           {node.isLoading ? (
-            <span className={cn("w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin", isActive ? "border-primary-foreground" : "border-primary")} />
+            <span className={cn("w-3.5 h-3.5 rounded-full border-2 border-t-transparent animate-spin",             isActive ? "border-primary" : "border-primary")} />
           ) : node.isExpanded ? (
             <ChevronDown className="w-4 h-4" />
           ) : (
             <ChevronRight className="w-4 h-4" />
           )}
+
         </div>
         <span className="text-lg filter drop-shadow-sm">{LEVEL_ICONS[node.level]}</span>
         <span className="truncate flex-1">{node.title}</span>
@@ -116,8 +117,8 @@ const SwimlaneBoard = ({ weekNode }: { weekNode: RoadmapNode }) => {
     <div className="overflow-x-auto pb-4 custom-scrollbar">
       <div className="min-w-max border rounded-3xl overflow-hidden bg-card/40 backdrop-blur-xl shadow-sm">
         {/* Header Row (Days) */}
-        <div className="flex border-b bg-muted/30">
-          <div className="w-56 shrink-0 border-r p-4 font-extrabold text-muted-foreground uppercase tracking-widest text-xs flex items-center bg-muted/10">
+        <div className="flex border-b bg-muted/50">
+          <div className="w-56 shrink-0 border-r p-4 font-extrabold text-muted-foreground uppercase tracking-widest text-xs flex items-center bg-muted/30">
             Nhân sự / Phòng ban
           </div>
           {days.map(day => (

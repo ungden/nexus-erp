@@ -4,9 +4,9 @@ import { CashflowStatus } from "@/lib/roadmap-types"
 import { formatVND } from '@/lib/format'
 
 const statusConfig: Record<CashflowStatus, { label: string; color: string; bg: string; icon: string }> = {
-  healthy: { label: 'Dòng tiền khoẻ', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', icon: '💚' },
-  warning: { label: 'Cần lưu ý', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', icon: '🟡' },
-  danger: { label: 'Nguy hiểm', color: 'text-red-700', bg: 'bg-red-50 border-red-200', icon: '🔴' },
+  healthy: { label: 'Dòng tiền khoẻ', color: 'text-emerald-700', bg: 'bg-emerald-50/80 border-emerald-200', icon: '💚' },
+  warning: { label: 'Cần lưu ý', color: 'text-amber-700', bg: 'bg-amber-50/80 border-amber-200', icon: '🟡' },
+  danger: { label: 'Nguy hiểm', color: 'text-red-700', bg: 'bg-red-50/80 border-red-200', icon: '🔴' },
 }
 
 export function CashflowBar({ revenue, expense, cashflow, status }: {
@@ -27,7 +27,7 @@ export function CashflowBar({ revenue, expense, cashflow, status }: {
         </span>
       </div>
       
-      <div className="flex h-3 rounded-full overflow-hidden bg-white/60 border border-white">
+      <div className="flex h-2 rounded-full overflow-hidden bg-white/60 border border-white">
         <div 
           className="h-full rounded-full transition-all duration-700 ease-out"
           style={{ 
