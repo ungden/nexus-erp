@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { Roadmap } from '@/lib/roadmap-types';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from './AuthContext';
 
 // Types
 export type Stage = 'Tiếp cận' | 'Đàm phán' | 'Chốt sale' | 'Thất bại';
@@ -414,11 +415,11 @@ function toDbPayable(p: Payable): Record<string, unknown> {
 
 // ─── Supabase sync helper ────────────────────────────────────
 
-async function syncToSupabase(table: string, rows: Record<string, unknown>[]) {
-  // Delete all existing rows, then upsert the current state
-  await supabase.from(table).delete().neq('id', -999);
+async function syncToSupabase(table: string, rows: Record<string, unknown>[], uid: string) {
+  // Delete all existing rows for this user, then upsert the current state
+  await supabase.from(table).delete().eq('user_id', uid);
   if (rows.length > 0) {
-    await supabase.from(table).upsert(rows);
+    await supabase.from(table).upsert(rows.map(r => ({ ...r, user_id: uid })));
   }
 }
 
@@ -434,6 +435,9 @@ const defaultFinance: AppState['finance'] = {
 const AppContext = createContext<AppState | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.id;
+
   // isLoaded gates sync-to-DB effects so they don't fire during initial fetch
   const isLoaded = useRef(false);
 
@@ -451,8 +455,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [payables, setPayables] = useState<Payable[]>([]);
 
-  // ── Load everything from Supabase on mount ──────────────────
+  // ── Load everything from Supabase on mount / user change ─────
   useEffect(() => {
+    if (!userId) return;
+
     let cancelled = false;
 
     async function loadAll() {
@@ -470,18 +476,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { data: financeRows },
         { data: roadmapRows },
       ] = await Promise.all([
-        supabase.from('employees').select('*'),
-        supabase.from('deals').select('*'),
-        supabase.from('tasks').select('*'),
-        supabase.from('kpis').select('*'),
-        supabase.from('payrolls').select('*'),
-        supabase.from('expenses').select('*'),
-        supabase.from('customers').select('*'),
-        supabase.from('partners').select('*'),
-        supabase.from('receivables').select('*'),
-        supabase.from('payables').select('*'),
-        supabase.from('finance_settings').select('*').eq('id', 1),
-        supabase.from('roadmaps').select('*').eq('id', 1),
+        supabase.from('employees').select('*').eq('user_id', userId),
+        supabase.from('deals').select('*').eq('user_id', userId),
+        supabase.from('tasks').select('*').eq('user_id', userId),
+        supabase.from('kpis').select('*').eq('user_id', userId),
+        supabase.from('payrolls').select('*').eq('user_id', userId),
+        supabase.from('expenses').select('*').eq('user_id', userId),
+        supabase.from('customers').select('*').eq('user_id', userId),
+        supabase.from('partners').select('*').eq('user_id', userId),
+        supabase.from('receivables').select('*').eq('user_id', userId),
+        supabase.from('payables').select('*').eq('user_id', userId),
+        supabase.from('finance_settings').select('*').eq('user_id', userId).limit(1),
+        supabase.from('roadmaps').select('*').eq('user_id', userId).limit(1),
       ]);
 
       if (cancelled) return;
@@ -524,85 +530,85 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     loadAll();
     return () => { cancelled = true; };
-  }, []);
+  }, [userId]);
 
   // ── Sync state → Supabase on every change (after initial load) ──
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('employees', employees.map(toDbEmployee));
-  }, [employees]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('employees', employees.map(toDbEmployee), userId);
+  }, [employees, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('deals', deals.map(toDbDeal));
-  }, [deals]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('deals', deals.map(toDbDeal), userId);
+  }, [deals, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('tasks', tasks.map(toDbTask));
-  }, [tasks]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('tasks', tasks.map(toDbTask), userId);
+  }, [tasks, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('kpis', kpis.map(toDbKpi));
-  }, [kpis]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('kpis', kpis.map(toDbKpi), userId);
+  }, [kpis, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('payrolls', payrolls.map(toDbPayroll));
-  }, [payrolls]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('payrolls', payrolls.map(toDbPayroll), userId);
+  }, [payrolls, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('expenses', expenses.map(toDbExpense));
-  }, [expenses]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('expenses', expenses.map(toDbExpense), userId);
+  }, [expenses, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('customers', customers.map(toDbCustomer));
-  }, [customers]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('customers', customers.map(toDbCustomer), userId);
+  }, [customers, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('partners', partners.map(toDbPartner));
-  }, [partners]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('partners', partners.map(toDbPartner), userId);
+  }, [partners, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('receivables', receivables.map(toDbReceivable));
-  }, [receivables]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('receivables', receivables.map(toDbReceivable), userId);
+  }, [receivables, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    syncToSupabase('payables', payables.map(toDbPayable));
-  }, [payables]);
+    if (!isLoaded.current || !userId) return;
+    syncToSupabase('payables', payables.map(toDbPayable), userId);
+  }, [payables, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
-    supabase.from('finance_settings').upsert({
-      id: 1,
-      target_revenue: finance.targetRevenue,
-      alloc_cogs: finance.allocations.cogs,
-      alloc_hr: finance.allocations.hr,
-      alloc_mkt: finance.allocations.mkt,
-      alloc_ops: finance.allocations.ops,
-      alloc_profit: finance.allocations.profit,
+    if (!isLoaded.current || !userId) return;
+    supabase.from('finance_settings').delete().eq('user_id', userId).then(() => {
+      supabase.from('finance_settings').upsert({
+        user_id: userId,
+        target_revenue: finance.targetRevenue,
+        alloc_cogs: finance.allocations.cogs,
+        alloc_hr: finance.allocations.hr,
+        alloc_mkt: finance.allocations.mkt,
+        alloc_ops: finance.allocations.ops,
+        alloc_profit: finance.allocations.profit,
+      });
     });
-  }, [finance]);
+  }, [finance, userId]);
 
   useEffect(() => {
-    if (!isLoaded.current) return;
+    if (!isLoaded.current || !userId) return;
     if (roadmap) {
-      supabase.from('roadmaps').upsert({
-        id: 1,
-        data: roadmap,
-        updated_at: new Date().toISOString(),
+      supabase.from('roadmaps').delete().eq('user_id', userId).then(() => {
+        supabase.from('roadmaps').upsert({ user_id: userId, data: roadmap, updated_at: new Date().toISOString() });
       });
     } else {
-      supabase.from('roadmaps').delete().eq('id', 1);
+      supabase.from('roadmaps').delete().eq('user_id', userId);
     }
-  }, [roadmap]);
+  }, [roadmap, userId]);
 
   // ── Roadmap setter (maintains same API) ─────────────────────
   const setRoadmap = (rm: Roadmap | null) => setRoadmapState(rm);

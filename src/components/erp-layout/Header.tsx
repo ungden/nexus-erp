@@ -1,8 +1,24 @@
 "use client"
 
-import { Menu, Bell, Search } from 'lucide-react';
+import { Menu, Bell, Search, LogOut } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
+
+  const displayEmail = user?.email ?? '';
+  const shortEmail = displayEmail.length > 24 ? displayEmail.slice(0, 22) + '…' : displayEmail;
+  const initials = (user?.user_metadata?.full_name as string)?.[0]?.toUpperCase()
+    || displayEmail[0]?.toUpperCase()
+    || '?';
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/auth');
+  };
+
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-x-4 border-b border-border bg-card/80 backdrop-blur-xl px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
       <button
@@ -40,16 +56,25 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
           <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-border" aria-hidden="true" />
 
-          <div className="flex items-center gap-x-4 lg:gap-x-6">
-            <button type="button" className="flex items-center gap-x-2">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
-                CEO
+          <div className="flex items-center gap-x-2 lg:gap-x-3">
+            <div className="flex items-center gap-x-2">
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                {initials}
               </div>
               <span className="hidden lg:flex lg:items-center">
-                <span className="ml-2 text-sm font-semibold leading-6 text-foreground" aria-hidden="true">
-                  Quản trị
+                <span className="ml-1 text-sm font-medium leading-6 text-foreground" aria-hidden="true" title={displayEmail}>
+                  {shortEmail}
                 </span>
               </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="-m-1.5 p-1.5 text-muted-foreground hover:text-red-500 transition-colors"
+              title="Đăng xuất"
+            >
+              <span className="sr-only">Đăng xuất</span>
+              <LogOut className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
         </div>
