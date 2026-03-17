@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 import { useAppContext } from "@/context/AppContext"
 import {
   Sparkles, ArrowLeft, ChevronDown, ChevronRight,
-  Calendar, Target, Users, Loader2,
+  Calendar, Target, Users, Loader2, RefreshCw,
 } from "lucide-react"
 
 interface Props {
@@ -55,6 +55,8 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
   const [selectedMonth, setSelectedMonth] = useState(0)
 
   const quarters = tree.children ?? []
+  const hasMonths = quarters.some(q => q.children && q.children.length > 0)
+  const hasWeeks = quarters.some(q => q.children?.some(m => m.children && m.children.length > 0))
 
   /* ── API calls ──────────────────────────────────────── */
 
@@ -199,31 +201,60 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         </div>
 
         {/* AI Generate Button */}
-        <button
-          disabled={isGenerating}
-          onClick={handleExpandQuarters}
-          className={cn(
-            "w-full py-5 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 transition-all shadow-lg",
-            isGenerating
-              ? "bg-indigo-400 cursor-not-allowed"
-              : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 hover:shadow-xl cursor-pointer"
-          )}
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" /> AI đang tạo chi tiết 12 tháng…
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5" /> AI Generate chi tiết 12 tháng
-            </>
-          )}
-          {!isGenerating && (
-            <span className="text-sm font-normal opacity-80 hidden sm:inline ml-1">
-              — AI sẽ phân tích từng quý và tạo kế hoạch 12 tháng
-            </span>
-          )}
-        </button>
+        {hasMonths ? (
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button
+              onClick={() => setViewLevel("months")}
+              className="flex-1 py-4 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 transition-all shadow-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 hover:shadow-xl cursor-pointer"
+            >
+              Xem chi tiết 12 tháng
+            </button>
+            <button
+              disabled={isGenerating}
+              onClick={handleExpandQuarters}
+              className={cn(
+                "sm:w-auto px-6 py-4 rounded-2xl font-bold text-indigo-700 text-base flex items-center justify-center gap-2 transition-all border border-indigo-200 bg-white/80 hover:bg-indigo-50 backdrop-blur-sm",
+                isGenerating ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+              )}
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" /> Tạo lại...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" /> Tạo lại với AI
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
+          <button
+            disabled={isGenerating}
+            onClick={handleExpandQuarters}
+            className={cn(
+              "w-full py-5 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 transition-all shadow-lg",
+              isGenerating
+                ? "bg-indigo-400 cursor-not-allowed"
+                : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 hover:shadow-xl cursor-pointer"
+            )}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" /> AI đang tạo chi tiết 12 tháng…
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5" /> AI Generate chi tiết 12 tháng
+              </>
+            )}
+            {!isGenerating && (
+              <span className="text-sm font-normal opacity-80 hidden sm:inline ml-1">
+                — AI sẽ phân tích từng quý và tạo kế hoạch 12 tháng
+              </span>
+            )}
+          </button>
+        )}
       </motion.div>
     )
   }
@@ -304,31 +335,60 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         })}
 
         {/* AI Generate Button */}
-        <button
-          disabled={isGenerating}
-          onClick={handleExpandMonths}
-          className={cn(
-            "w-full py-5 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 transition-all shadow-lg",
-            isGenerating
-              ? "bg-indigo-400 cursor-not-allowed"
-              : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 hover:shadow-xl cursor-pointer"
-          )}
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" /> AI đang tạo lịch tuần & công việc…
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5" /> AI Generate lịch tuần & công việc
-            </>
-          )}
-          {!isGenerating && (
-            <span className="text-sm font-normal opacity-80 hidden sm:inline ml-1">
-              — AI sẽ tạo lịch tuần, gán nhân sự và KPI cho từng ngày trong 12 tháng
-            </span>
-          )}
-        </button>
+        {hasWeeks ? (
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button
+              onClick={() => setViewLevel("weeks")}
+              className="flex-1 py-4 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 transition-all shadow-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 hover:shadow-xl cursor-pointer"
+            >
+              Xem lịch tuần & công việc
+            </button>
+            <button
+              disabled={isGenerating}
+              onClick={handleExpandMonths}
+              className={cn(
+                "sm:w-auto px-6 py-4 rounded-2xl font-bold text-indigo-700 text-base flex items-center justify-center gap-2 transition-all border border-indigo-200 bg-white/80 hover:bg-indigo-50 backdrop-blur-sm",
+                isGenerating ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+              )}
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" /> Tạo lại...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" /> Tạo lại với AI
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
+          <button
+            disabled={isGenerating}
+            onClick={handleExpandMonths}
+            className={cn(
+              "w-full py-5 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 transition-all shadow-lg",
+              isGenerating
+                ? "bg-indigo-400 cursor-not-allowed"
+                : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 hover:shadow-xl cursor-pointer"
+            )}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" /> AI đang tạo lịch tuần & công việc…
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5" /> AI Generate lịch tuần & công việc
+              </>
+            )}
+            {!isGenerating && (
+              <span className="text-sm font-normal opacity-80 hidden sm:inline ml-1">
+                — AI sẽ tạo lịch tuần, gán nhân sự và KPI cho từng ngày trong 12 tháng
+              </span>
+            )}
+          </button>
+        )}
       </motion.div>
     )
   }
