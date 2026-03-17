@@ -128,6 +128,9 @@ export interface CompanyProfile {
 // ---- Roadmap (top-level) ----
 
 export interface Roadmap {
+  id: string;          // MỚI: ID duy nhất của kịch bản
+  name: string;        // MỚI: Tên kịch bản
+  isActive: boolean;   // MỚI: Đây có phải là kịch bản chính đang được áp dụng cho ERP không?
   company: CompanyProfile;
   board: BoardAnalysis;
   tree: RoadmapNode;

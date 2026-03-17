@@ -73,7 +73,7 @@ function SectionHeader({ label }: { label: string }) {
 }
 
 export default function Dashboard() {
-  const { finance, deals, employees, expenses, roadmap, receivables, payables } = useAppContext();
+  const { finance, deals, employees, expenses, activeRoadmap, receivables, payables } = useAppContext();
   const [activeTab, setActiveTab] = useState<FinancialTab>('pnl');
   
   const targetRevenue = finance.targetRevenue;
@@ -133,8 +133,8 @@ export default function Dashboard() {
 
   // ── Revenue chart from roadmap ──────────────────────────────
   const revenueData = useMemo(() => {
-    if (roadmap?.tree?.children && roadmap.tree.children.length >= 4) {
-      const quarters = roadmap.tree.children;
+    if (activeRoadmap?.tree?.children && activeRoadmap.tree.children.length >= 4) {
+      const quarters = activeRoadmap.tree.children;
       return [
         { name: 'Q1a', actual: Math.round(quarters[0].revenue * 0.45 / 1000000), target: Math.round(quarters[0].revenue * 0.5 / 1000000) },
         { name: 'Q1b', actual: Math.round(quarters[0].revenue * 0.55 / 1000000), target: Math.round(quarters[0].revenue * 0.5 / 1000000) },
@@ -145,13 +145,13 @@ export default function Dashboard() {
       ];
     }
     return defaultRevenueData;
-  }, [roadmap]);
+  }, [activeRoadmap]);
 
   const currentQuarter = useMemo(() => {
-    if (!roadmap?.tree?.children || roadmap.tree.children.length === 0) return null;
+    if (!activeRoadmap?.tree?.children || activeRoadmap.tree.children.length === 0) return null;
     const currentQ = Math.ceil((new Date().getMonth() + 1) / 3) - 1;
-    return roadmap.tree.children[Math.min(currentQ, roadmap.tree.children.length - 1)];
-  }, [roadmap]);
+    return activeRoadmap.tree.children[Math.min(currentQ, activeRoadmap.tree.children.length - 1)];
+  }, [activeRoadmap]);
 
   // ── Scorecard cards ─────────────────────────────────────────
   const scoreCards = [
@@ -373,7 +373,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Roadmap widget */}
-        {roadmap && currentQuarter ? (
+        {activeRoadmap && currentQuarter ? (
           <motion.div 
             className="glass-card overflow-hidden"
             initial={{ opacity: 0, x: 16 }}

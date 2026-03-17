@@ -133,15 +133,15 @@ function buildNodesAndEdges(tree: RoadmapNode, companyName: string) {
 }
 
 export function MindmapView() {
-  const { roadmap } = useAppContext()
+  const { activeRoadmap } = useAppContext()
 
   const { initialNodes, initialEdges } = useMemo(() => {
-    if (!roadmap) {
+    if (!activeRoadmap) {
       return { initialNodes: [], initialEdges: [] }
     }
-    const { nodes, edges } = buildNodesAndEdges(roadmap.tree, roadmap.company.companyName)
+    const { nodes, edges } = buildNodesAndEdges(activeRoadmap.tree, activeRoadmap.company.companyName)
     return { initialNodes: nodes, initialEdges: edges }
-  }, [roadmap])
+  }, [activeRoadmap])
 
   const [nodes, , onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
@@ -152,7 +152,7 @@ export function MindmapView() {
   )
 
   // Fallback: No roadmap data
-  if (!roadmap) {
+  if (!activeRoadmap) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
         <div className="text-center space-y-3">

@@ -140,8 +140,9 @@ interface AppState {
     allocations: { cogs: number; hr: number; mkt: number; ops: number; profit: number };
   };
   setFinance: React.Dispatch<React.SetStateAction<AppState['finance']>>;
-  roadmap: Roadmap | null;
-  setRoadmap: (roadmap: Roadmap | null) => void;
+  roadmaps: Roadmap[];
+  setRoadmaps: React.Dispatch<React.SetStateAction<Roadmap[]>>;
+  activeRoadmap: Roadmap | null;
   customers: Customer[];
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
   partners: Partner[];
@@ -455,11 +456,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [finance, setFinance] = useState<AppState['finance']>(defaultFinance);
-  const [roadmap, setRoadmapState] = useState<Roadmap | null>(null);
+  const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [payables, setPayables] = useState<Payable[]>([]);
+
+  const activeRoadmap = roadmaps.find(r => r.isActive) || roadmaps[0] || null;
 
   // ── Load everything from Supabase on mount / user change ─────
   useEffect(() => {
@@ -493,7 +496,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('receivables').select('*').eq('user_id', userId),
         supabase.from('payables').select('*').eq('user_id', userId),
         supabase.from('finance_settings').select('*').eq('user_id', userId).limit(1),
-        supabase.from('roadmaps').select('*').eq('user_id', userId).limit(1),
+        supabase.from('roadmaps').select('*').eq('user_id', userId),
       ]);
 
       if (cancelled) return;
@@ -524,10 +527,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // Roadmap (single JSONB row)
-      if (roadmapRows && roadmapRows.length > 0 && roadmapRows[0].data) {
-        setRoadmapState(roadmapRows[0].data as Roadmap);
-      }
+      // Roadmaps (multiple rows)
+      const loadedRoadmaps = roadmapRows?.map(r => r.data as Roadmap) || [];
+      setRoadmaps(loadedRoadmaps);
 
       // Mark loaded — enables sync-to-DB effects
       isLoaded.current = true;
@@ -607,17 +609,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    if (roadmap) {
-      supabase.from('roadmaps').delete().eq('user_id', userId).then(() => {
-        supabase.from('roadmaps').upsert({ user_id: userId, data: roadmap, updated_at: new Date().toISOString() });
-      });
-    } else {
-      supabase.from('roadmaps').delete().eq('user_id', userId);
-    }
-  }, [roadmap, userId]);
-
-  // ── Roadmap setter (maintains same API) ─────────────────────
-  const setRoadmap = (rm: Roadmap | null) => setRoadmapState(rm);
+    
+    // Xóa tất cả roadmap cũ của user này và ghi lại mảng mới
+    supabase.from('roadmaps').delete().eq('user_id', userId).then(() => {
+      if (roadmaps.length > 0) {
+        const rows = roadmaps.map(rm => ({
+          user_id: userId,
+          data: rm,
+          updated_at: new Date().toISOString()
+        }));
+        supabase.from('roadmaps').upsert(rows);
+      }
+    });
+  }, [roadmaps, userId]);
 
   return (
     <AppContext.Provider value={{
@@ -628,7 +632,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       payrolls, setPayrolls,
       expenses, setExpenses,
       finance, setFinance,
-      roadmap, setRoadmap,
+      roadmaps, setRoadmaps, activeRoadmap,
       customers, setCustomers,
       partners, setPartners,
       receivables, setReceivables,

@@ -15,7 +15,7 @@ import {
 import { useAppContext } from "@/context/AppContext"
 import {
   CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan,
-  RoadmapNode,
+  RoadmapNode, Roadmap,
 } from "@/lib/roadmap-types"
 import { formatVND, formatNumber } from "@/lib/format"
 
@@ -95,7 +95,7 @@ function CashflowHealth({ revenue, expense }: { revenue: number; expense: number
 
 export default function PlanWizardPage() {
   const router = useRouter()
-  const { setFinance, setRoadmap } = useAppContext()
+  const { setFinance, roadmaps, setRoadmaps } = useAppContext()
 
   // ---------- Screen state ----------
   const [screen, setScreen] = useState<Screen>("input")
@@ -253,8 +253,32 @@ export default function PlanWizardPage() {
       fixedCost: board.hr.monthlyFixedCost,
       products,
     }
-    setRoadmap({ company: profile, board, tree, generatedAt })
-    router.push("/erp/plan/view")
+
+    const newRoadmap: Roadmap = {
+      id: `rm_${Date.now()}`,
+      name: `Kịch bản: ${objective}`,
+      isActive: roadmaps.length === 0, // Make active if it's the first one
+      company: profile,
+      board,
+      tree,
+      generatedAt
+    };
+    setRoadmaps([...roadmaps, newRoadmap]);
+
+    if (newRoadmap.isActive) {
+      setFinance({
+        targetRevenue: profile.revenue,
+        allocations: {
+          cogs: board.cfo.budgetAllocation.cogs.percent,
+          hr: board.cfo.budgetAllocation.hr.percent,
+          mkt: board.cfo.budgetAllocation.marketing.percent,
+          ops: board.cfo.budgetAllocation.operations.percent,
+          profit: board.cfo.budgetAllocation.profit.percent,
+        },
+      });
+    }
+
+    router.push("/erp/plan/view?id=" + newRoadmap.id)
   }
 
   // ---- Computed cashflow for header ----
