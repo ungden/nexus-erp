@@ -423,6 +423,72 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
     )
   }
 
+  /* ── TASK CARD COMPONENT ────────────────────────────── */
+
+  function TaskCard({ task }: { task: RoadmapNode }) {
+    const assigneeName = task.assigneeName || "Chưa gán"
+
+    return (
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        onClick={(e) => {
+          e.stopPropagation()
+          setEditingTask(task)
+        }}
+        className="group relative p-3 rounded-xl border bg-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-left cursor-pointer flex flex-col gap-2"
+      >
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Edit2 className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
+        </div>
+
+        <p className="text-sm font-bold text-foreground line-clamp-2 pr-5">{task.title}</p>
+
+        {task.personalKPI && (
+          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+            {task.personalKPI}
+          </p>
+        )}
+
+        <div className="flex items-center gap-1.5 mt-1">
+          <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold shrink-0">
+            {assigneeName.charAt(0)}
+          </div>
+          <span className="text-xs font-semibold text-foreground truncate">
+            {assigneeName}
+          </span>
+          {task.department && (
+            <span className="text-[10px] text-muted-foreground truncate border rounded px-1.5 py-0.5 bg-muted/20 ml-auto shrink-0 flex items-center gap-1">
+              <Users className="w-2.5 h-2.5" />
+              {task.department}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between mt-1">
+          {task.bonusAmount ? (
+            <span className="text-xs font-bold text-emerald-600">
+              +{formatVND(task.bonusAmount, "full")}
+            </span>
+          ) : <span />}
+          {task.startDate && (
+            <span className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">
+              <Calendar className="w-3 h-3" />
+              {new Date(task.startDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+            </span>
+          )}
+        </div>
+
+        {task.syncedToTasks && (
+          <div className="mt-1 text-[10px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 w-max px-2 py-1 rounded-md">
+            ✓ Đã đồng bộ
+          </div>
+        )}
+      </motion.div>
+    )
+  }
+
   /* ── MONTH VIEW ─────────────────────────────────────── */
 
   function MonthView({ node }: { node: RoadmapNode }) {
@@ -444,47 +510,64 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
           )}
         </div>
 
-        {/* Week cards — 2×2 grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {weeks.map((w, wi) => {
-            const tasks = countTasks(w)
-            return (
-              <button
-                key={w.id}
-                onClick={() => navigateTo(w.id)}
-                className="glass-card p-4 flex flex-col gap-2 text-left hover:ring-2 hover:ring-primary/40 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-foreground">Tuần {wi + 1}</span>
-                  {w.startDate && w.endDate && (
-                    <span className="text-[11px] text-muted-foreground">
-                      {new Date(w.startDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
-                      {" – "}
-                      {new Date(w.endDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground line-clamp-1">{w.description}</p>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="font-semibold text-emerald-600">+{formatVND(w.revenue)}</span>
-                  <span className="font-semibold text-red-500">−{formatVND(w.expense)}</span>
-                  {tasks > 0 && (
-                    <span className="ml-auto bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full text-[10px]">
-                      {tasks} việc
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity mt-1 flex items-center gap-1">
-                  Xem Kanban <ChevronRight className="w-3 h-3" />
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        {weeks.length === 0 && (
+        {/* Trello Kanban Board for Weeks */}
+        {weeks.length === 0 ? (
           <div className="glass-card p-8 text-center text-muted-foreground">
             Chưa có dữ liệu tuần cho tháng này.
+          </div>
+        ) : (
+          <div className="flex overflow-x-auto custom-scrollbar gap-4 pb-4 items-start">
+            {weeks.map((w, wi) => {
+              // Flatten all tasks for this week
+              const tasks = (w.children ?? []).flatMap((day) => day.children ?? [])
+
+              return (
+                <div key={w.id} className="min-w-[320px] w-[320px] shrink-0 bg-muted/30 rounded-2xl flex flex-col max-h-[70vh]">
+                  {/* Column Header */}
+                  <div className="p-4 border-b border-border/50 bg-white/50 rounded-t-2xl">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-base font-bold text-foreground">Tuần {wi + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">
+                          {countTasks(w)} việc
+                        </span>
+                        {w.startDate && w.endDate && (
+                          <span className="text-[11px] text-muted-foreground font-medium">
+                            {new Date(w.startDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+                            {" – "}
+                            {new Date(w.endDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-1 mb-2">{w.title}</p>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="font-semibold text-emerald-600">+{formatVND(w.revenue)}</span>
+                      <span className="font-semibold text-red-500">−{formatVND(w.expense)}</span>
+                    </div>
+                  </div>
+
+                  {/* Task Cards */}
+                  <div className="p-3 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3">
+                    {tasks.length > 0 ? (
+                      tasks.map((task) => <TaskCard key={task.id} task={task} />)
+                    ) : (
+                      <div className="text-center text-xs text-muted-foreground py-4">Chưa có công việc</div>
+                    )}
+                  </div>
+
+                  {/* Column Footer */}
+                  <div className="p-3 pt-0">
+                    <button
+                      onClick={() => navigateTo(w.id)}
+                      className="w-full py-2 bg-white rounded-xl text-xs font-bold text-primary hover:bg-primary hover:text-white transition-colors shadow-sm border cursor-pointer"
+                    >
+                      Xem chi tiết tuần →
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -497,48 +580,6 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
     const days = (node.children ?? []).slice(0, 5)
     const dayLabels = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6"]
     const unsynced = collectUnsyncedTasks(node)
-
-    /* Build a full employee list from context — CRITICAL FIX:
-       Show ALL employees, not just those with tasks. */
-    const allEmployees = useMemo(() => {
-      const empList = employees ?? []
-      /* If no employees in context, fall back to names found in tasks */
-      if (empList.length === 0) {
-        const nameSet = new Set<string>()
-        days.forEach((d) => (d.children ?? []).forEach((t) => {
-          nameSet.add(t.assigneeName ?? "Chưa giao")
-        }))
-        return Array.from(nameSet).map((name, idx) => ({
-          id: -(idx + 1),
-          name,
-          department: "",
-        }))
-      }
-      return empList.map((e) => ({ id: e.id, name: e.name, department: e.department }))
-    }, [employees, days])
-
-    /* Index tasks by (employeeId or name) × day for O(1) lookup */
-    const taskIndex = useMemo(() => {
-      const map = new Map<string, RoadmapNode[]>()
-      days.forEach((day) => {
-        (day.children ?? []).forEach((task) => {
-          const key = `${task.assigneeId ?? task.assigneeName ?? "none"}::${day.id}`
-          const arr = map.get(key) ?? []
-          arr.push(task)
-          map.set(key, arr)
-        })
-      })
-      return map
-    }, [days])
-
-    function getTasksForCell(emp: { id: number; name: string }, dayNode: RoadmapNode): RoadmapNode[] {
-      /* Try by id first, then by name */
-      return (
-        taskIndex.get(`${emp.id}::${dayNode.id}`) ??
-        taskIndex.get(`${emp.name}::${dayNode.id}`) ??
-        []
-      )
-    }
 
     return (
       <div className="space-y-5">
@@ -579,105 +620,35 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
             Chưa có dữ liệu ngày cho tuần này.
           </div>
         ) : (
-          <div className="glass-card overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
-              <div className="min-w-max">
-                {/* Day column headers */}
-                <div className="flex border-b bg-muted/30">
-                  <div className="w-40 shrink-0 border-r p-3 text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5" /> Nhân sự
-                  </div>
-                  {days.map((d, di) => (
-                    <div key={d.id} className="w-52 shrink-0 border-r last:border-r-0 p-3 text-center">
-                      <span className="text-xs font-bold text-foreground">{dayLabels[di] ?? d.title}</span>
-                      {d.startDate && (
-                        <span className="block text-[10px] text-muted-foreground mt-0.5">
-                          {new Date(d.startDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+          <div className="flex overflow-x-auto custom-scrollbar gap-4 pb-4 items-start">
+            {days.map((d, di) => {
+              const tasks = d.children ?? []
 
-                {/* Employee rows — ALL employees shown */}
-                {allEmployees.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-muted-foreground">
-                    Không có nhân sự nào. Hãy thêm nhân sự ở mục Nhân sự trước.
+              return (
+                <div key={d.id} className="min-w-[300px] w-[300px] shrink-0 bg-muted/30 rounded-2xl flex flex-col max-h-[75vh]">
+                  {/* Column Header */}
+                  <div className="p-3 border-b border-border/50 bg-white/50 rounded-t-2xl text-center">
+                    <span className="text-sm font-bold text-foreground">{dayLabels[di] ?? d.title}</span>
+                    {d.startDate && (
+                      <span className="block text-[11px] font-medium text-muted-foreground mt-0.5">
+                        {new Date(d.startDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  allEmployees.map((emp) => (
-                    <div key={emp.id} className="flex border-b last:border-b-0 hover:bg-muted/10 transition-colors">
-                      {/* Name label */}
-                      <div className="w-40 shrink-0 border-r p-3 flex items-center">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-7 h-7 rounded-lg bg-blue-500 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                            {emp.name.charAt(0)}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-xs font-semibold text-foreground truncate block max-w-[90px]">
-                              {emp.name}
-                            </span>
-                            {emp.department && (
-                              <span className="text-[9px] text-muted-foreground truncate block max-w-[90px]">
-                                {emp.department}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+
+                  {/* Task Cards */}
+                  <div className="p-3 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3">
+                    {tasks.length > 0 ? (
+                      tasks.map((task) => <TaskCard key={task.id} task={task} />)
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center py-6">
+                        <span className="text-xs text-muted-foreground/60">—</span>
                       </div>
-
-                      {/* Day cells */}
-                      {days.map((day) => {
-                        const cellTasks = getTasksForCell(emp, day)
-                        return (
-                          <div key={day.id} className="w-52 shrink-0 border-r last:border-r-0 p-2 flex flex-col gap-2 min-h-[80px]">
-                            {cellTasks.map((task) => (
-                              <div
-                                key={task.id}
-                                onClick={() => setEditingTask(task)}
-                                className="group relative p-2.5 rounded-xl border bg-white hover:shadow-md hover:-translate-y-0.5 transition-all text-left cursor-pointer"
-                              >
-                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Edit2 className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
-                                </div>
-                                <p className="text-xs font-bold text-foreground line-clamp-1 pr-4">{task.title}</p>
-                                {task.personalKPI && (
-                                  <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">{task.personalKPI}</p>
-                                )}
-                                <div className="flex items-center justify-between mt-1.5">
-                                  {task.bonusAmount ? (
-                                    <span className="text-[10px] font-bold text-emerald-600">
-                                      +{formatVND(task.bonusAmount, "full")}
-                                    </span>
-                                  ) : <span />}
-                                  {task.startDate && (
-                                    <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
-                                      <Calendar className="w-2.5 h-2.5" />
-                                      {new Date(task.startDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
-                                    </span>
-                                  )}
-                                </div>
-                                {task.syncedToTasks && (
-                                  <div className="mt-2 text-[9px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 w-max px-1.5 py-0.5 rounded-md">
-                                    ✓ Đã đồng bộ
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                            {/* Empty state for cell */}
-                            {cellTasks.length === 0 && (
-                              <div className="flex-1 flex items-center justify-center">
-                                <span className="text-[10px] text-muted-foreground/40">—</span>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
