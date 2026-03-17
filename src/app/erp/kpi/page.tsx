@@ -1,9 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { Target, TrendingUp, Award, BarChart3, ChevronRight, X, Trash2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Target, BarChart3, AlertTriangle, CheckCircle2, ChevronRight, X, Trash2 } from 'lucide-react';
 import { useAppContext, KPI as AppKPI, KpiStatus } from '@/context/AppContext';
 import { formatVND, formatNumber } from '@/lib/format';
+
+const statusConfig: Record<KpiStatus, { label: string; color: string; bg: string; barColor: string; border: string }> = {
+  'on-track': { label: 'Đúng tiến độ', color: 'text-indigo-700', bg: 'bg-indigo-50', barColor: 'bg-indigo-500', border: 'border-indigo-200' },
+  'at-risk': { label: 'Có nguy cơ', color: 'text-amber-700', bg: 'bg-amber-50', barColor: 'bg-amber-500', border: 'border-amber-200' },
+  'behind': { label: 'Chậm trễ', color: 'text-red-700', bg: 'bg-red-50', barColor: 'bg-red-500', border: 'border-red-200' },
+};
 
 export default function KPI() {
   const { kpis, setKpis } = useAppContext();
@@ -39,11 +45,35 @@ export default function KPI() {
     }
   };
 
-  const completedCount = kpis.filter(k => k.progress >= 100).length;
-  const inProgressCount = kpis.filter(k => k.progress < 100).length;
+  // ── Scorecard stats ─────────────────────────────────────────
+  const totalCount = kpis.length;
+  const onTrackCount = kpis.filter(k => k.status === 'on-track').length;
+  const atRiskCount = kpis.filter(k => k.status === 'at-risk').length;
+  const behindCount = kpis.filter(k => k.status === 'behind').length;
+
+  // ── Group by department ─────────────────────────────────────
+  const groupedKpis = useMemo(() => {
+    const groups: Record<string, AppKPI[]> = {};
+    kpis.forEach(kpi => {
+      const dept = kpi.department || 'Chung';
+      if (!groups[dept]) groups[dept] = [];
+      groups[dept].push(kpi);
+    });
+    return groups;
+  }, [kpis]);
+
+  const departments = Object.keys(groupedKpis).sort();
+
+  const scorecardItems = [
+    { label: 'Tổng KPIs', value: totalCount, icon: BarChart3, iconColor: 'text-indigo-600', iconBg: 'bg-indigo-50', borderColor: 'border-l-indigo-500' },
+    { label: 'Đạt mục tiêu', value: onTrackCount, icon: CheckCircle2, iconColor: 'text-emerald-600', iconBg: 'bg-emerald-50', borderColor: 'border-l-emerald-500' },
+    { label: 'Đang theo dõi', value: atRiskCount, icon: AlertTriangle, iconColor: 'text-amber-600', iconBg: 'bg-amber-50', borderColor: 'border-l-amber-500' },
+    { label: 'Cần cải thiện', value: behindCount, icon: Target, iconColor: 'text-red-600', iconBg: 'bg-red-50', borderColor: 'border-l-red-500' },
+  ];
 
   return (
     <div className="space-y-6 relative">
+      {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Đánh giá Năng lực & KPI</h1>
@@ -59,87 +89,102 @@ export default function KPI() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* KPI Overview Cards */}
-        <div className="glass-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-green-100 rounded-lg text-green-600">
-            <TrendingUp className="h-6 w-6" />
+      {/* ── Scorecard header (4 mini cards) ────────────────────── */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {scorecardItems.map((item) => (
+          <div
+            key={item.label}
+            className={`bg-card rounded-xl border border-border border-l-4 ${item.borderColor} p-4 flex items-center gap-3`}
+          >
+            <div className={`p-2 rounded-lg ${item.iconBg}`}>
+              <item.icon className={`h-5 w-5 ${item.iconColor}`} />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
+              <p className="text-2xl font-bold text-foreground">{item.value}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Mục tiêu hoàn thành</p>
-            <p className="text-2xl font-bold text-foreground">{completedCount}/{kpis.length}</p>
-          </div>
-        </div>
-        <div className="glass-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-yellow-100 rounded-lg text-yellow-600">
-            <BarChart3 className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Đang thực hiện</p>
-            <p className="text-2xl font-bold text-foreground">{inProgressCount}</p>
-          </div>
-        </div>
-        <div className="glass-card p-6 flex items-center space-x-4">
-          <div className="p-3 bg-primary/10 rounded-lg text-primary">
-            <Award className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Điểm đánh giá TB</p>
-            <p className="text-2xl font-bold text-foreground">4.2/5.0</p>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* KPI List */}
-      <div className="glass-card overflow-hidden">
-        <div className="p-6 border-b border-border">
-          <h2 className="text-lg font-medium text-foreground">Tiến độ Mục tiêu (Công ty)</h2>
+      {/* ── KPIs grouped by department ─────────────────────────── */}
+      {kpis.length === 0 ? (
+        <div className="glass-card p-8 text-center text-muted-foreground">
+          Chưa có mục tiêu nào được thiết lập.
         </div>
-        <div className="divide-y divide-gray-200">
-          {kpis.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">Chưa có mục tiêu nào được thiết lập.</div>
-          ) : kpis.map((kpi) => (
-            <div key={kpi.id} className="p-6 hover:bg-muted/30 transition-colors group">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <h3 className="text-sm font-medium text-foreground">{kpi.title}</h3>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted/50 text-gray-800">
-                    {kpi.department}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button onClick={() => deleteKpi(kpi.id)} className="text-muted-foreground/70 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                  <button className="text-muted-foreground/70 hover:text-muted-foreground">
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
-                <span>Đạt được: <strong className="text-foreground">{formatVND(kpi.current, 'full')}</strong></span>
-                <span>Mục tiêu: <strong className="text-foreground">{formatVND(kpi.target, 'full')}</strong></span>
-              </div>
-              
-              <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div 
-                  className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${
-                    kpi.status === 'on-track' ? 'bg-green-500' : 
-                    kpi.status === 'at-risk' ? 'bg-yellow-500' : 'bg-red-500'
-                  }`}
-                  style={{ width: `${kpi.progress}%` }}
-                />
-              </div>
-              <div className="mt-2 text-right text-xs font-medium text-muted-foreground">
-                {kpi.progress}%
+      ) : (
+        departments.map((dept) => (
+          <div key={dept} className="glass-card overflow-hidden">
+            {/* Department header */}
+            <div className="p-4 md:p-5 border-b border-border bg-muted/20 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-bold text-foreground">{dept}</h2>
+                <span className="text-xs text-muted-foreground">({groupedKpis[dept].length} KPIs)</span>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Add KPI Modal */}
+            {/* KPI cards within department */}
+            <div className="divide-y divide-border">
+              {groupedKpis[dept].map((kpi) => {
+                const status = statusConfig[kpi.status];
+                return (
+                  <div 
+                    key={kpi.id} 
+                    className={`p-4 md:p-5 hover:bg-muted/20 transition-colors group border-l-4 ${
+                      kpi.status === 'on-track' ? 'border-l-indigo-500' :
+                      kpi.status === 'at-risk' ? 'border-l-amber-500' : 'border-l-red-500'
+                    }`}
+                  >
+                    {/* Top row: title + badges + actions */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-sm font-semibold text-foreground">{kpi.title}</h3>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${status.bg} ${status.color} ${status.border}`}>
+                          {status.label}
+                        </span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-muted/50 text-muted-foreground border border-border">
+                          {kpi.department}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => deleteKpi(kpi.id)} className="text-muted-foreground/70 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                        <button className="text-muted-foreground/70 hover:text-muted-foreground">
+                          <ChevronRight className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Metrics row */}
+                    <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
+                      <span>Đạt được: <strong className="text-foreground">{formatVND(kpi.current, 'full')}</strong></span>
+                      <span>Mục tiêu: <strong className="text-foreground">{formatVND(kpi.target, 'full')}</strong></span>
+                    </div>
+                    
+                    {/* Progress bar — taller h-3 with percentage */}
+                    <div className="relative w-full h-3 bg-muted/40 rounded-full overflow-hidden">
+                      <div 
+                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${status.barColor}`}
+                        style={{ width: `${kpi.progress}%` }}
+                      />
+                      {/* Percentage label inside bar */}
+                      <div className="absolute inset-0 flex items-center justify-end pr-2">
+                        <span className={`text-[10px] font-bold ${kpi.progress > 30 ? 'text-white' : 'text-muted-foreground'}`}>
+                          {kpi.progress}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* ── Add KPI Modal ──────────────────────────────────────── */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="glass-card p-6 w-full max-w-md shadow-xl">

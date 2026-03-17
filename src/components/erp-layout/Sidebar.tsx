@@ -13,7 +13,9 @@ import {
   Hexagon,
   Sparkles,
   GitBranchPlus,
-  Map
+  Map,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,7 +35,14 @@ const planNav = [
   { name: 'Sơ đồ tư duy', href: '/erp/plan/mindmap', icon: GitBranchPlus },
 ];
 
-export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: boolean) => void }) {
+interface SidebarProps {
+  isOpen: boolean;
+  setIsOpen: (val: boolean) => void;
+  collapsed: boolean;
+  setCollapsed: (val: boolean) => void;
+}
+
+export function Sidebar({ isOpen, setIsOpen, collapsed, setCollapsed }: SidebarProps) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -49,11 +58,13 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (va
       <li>
         <Link
           href={item.href}
+          title={collapsed ? item.name : undefined}
           className={cn(
             active
               ? 'bg-primary/10 text-primary'
               : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
-            'group flex gap-x-3 rounded-lg p-2.5 text-sm leading-6 font-medium transition-colors'
+            'group flex items-center gap-x-3 rounded-lg p-2.5 text-sm leading-6 font-medium transition-colors',
+            collapsed && 'justify-center px-2'
           )}
           onClick={() => setIsOpen(false)}
         >
@@ -64,7 +75,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (va
             )}
             aria-hidden="true"
           />
-          {item.name}
+          {!collapsed && <span>{item.name}</span>}
         </Link>
       </li>
     );
@@ -80,39 +91,72 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (va
       )}
       
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-card/80 backdrop-blur-xl border-r border-border transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col",
+        "fixed inset-y-0 left-0 z-50 bg-card/80 backdrop-blur-xl border-r border-border transform transition-all duration-200 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col",
+        collapsed ? "w-16" : "w-64",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="flex h-16 shrink-0 items-center px-6 border-b border-border">
+        {/* Logo */}
+        <div className={cn(
+          "flex h-16 shrink-0 items-center border-b border-border",
+          collapsed ? "justify-center px-2" : "px-6"
+        )}>
           <Link href="/erp" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-sm">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-sm shrink-0">
               <Hexagon size={18} />
             </div>
-            <span className="font-bold text-lg text-foreground tracking-tight">
-              NexusERP
-            </span>
+            {!collapsed && (
+              <span className="font-bold text-lg text-foreground tracking-tight">
+                NexusERP
+              </span>
+            )}
           </Link>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-4 space-y-6">
+        {/* Navigation */}
+        <nav className={cn("flex-1 overflow-y-auto space-y-6", collapsed ? "p-2" : "p-4")}>
           <div>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2.5 mb-2">
-              Quản trị
-            </p>
+            {!collapsed && (
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2.5 mb-2">
+                Quản trị
+              </p>
+            )}
             <ul role="list" className="space-y-1">
               {mainNav.map((item) => <NavItem key={item.href} item={item} />)}
             </ul>
           </div>
 
           <div>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2.5 mb-2">
-              Kế hoạch AI
-            </p>
+            {!collapsed && (
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2.5 mb-2">
+                Kế hoạch AI
+              </p>
+            )}
             <ul role="list" className="space-y-1">
               {planNav.map((item) => <NavItem key={item.href} item={item} />)}
             </ul>
           </div>
         </nav>
+
+        {/* Collapse toggle */}
+        <div className={cn("border-t border-border", collapsed ? "p-2" : "p-3")}>
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className={cn(
+              "flex items-center gap-2 rounded-lg p-2 text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors w-full",
+              collapsed ? "justify-center" : ""
+            )}
+            title={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4 shrink-0" />
+            ) : (
+              <>
+                <PanelLeftClose className="h-4 w-4 shrink-0" />
+                <span className="text-xs">Thu gọn</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </>
   );
