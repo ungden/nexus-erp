@@ -62,23 +62,27 @@ function CashflowHealth({ revenue, expense }: { revenue: number; expense: number
   const isHealthy = margin >= 10
   const isWarning = margin >= 0 && margin < 10
   return (
-    <div className={`rounded-xl border p-4 flex items-center gap-3 text-sm ${
-      isHealthy ? "bg-white border-emerald-300"
-        : isWarning ? "bg-white border-amber-300"
-        : "bg-white border-red-300"
+    <div className={`rounded-xl border p-5 flex items-center gap-4 text-sm bg-white shadow-sm ${
+      isHealthy ? "border-emerald-500/30"
+        : isWarning ? "border-amber-500/30"
+        : "border-red-500/30"
     }`}>
-      {isHealthy ? <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-        : isWarning ? <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-        : <XCircle className="w-5 h-5 text-red-600 shrink-0" />}
+      <div className={`p-3 rounded-full ${
+        isHealthy ? "bg-emerald-50 text-emerald-600"
+          : isWarning ? "bg-amber-50 text-amber-600"
+          : "bg-red-50 text-red-600"
+      }`}>
+        {isHealthy ? <CheckCircle2 className="w-6 h-6" />
+          : isWarning ? <AlertTriangle className="w-6 h-6" />
+          : <XCircle className="w-6 h-6" />}
+      </div>
       <div className="flex-1 min-w-0">
-        <p className={`font-bold text-xs ${
-          isHealthy ? "text-emerald-700" : isWarning ? "text-amber-700" : "text-red-700"
-        }`}>
+        <p className="font-bold text-sm text-foreground">
           {isHealthy ? "Dòng tiền KHOẺ" : isWarning ? "Dòng tiền CẦN LƯU Ý" : "Dòng tiền NGUY HIỂM"}
-          {" · "}Biên lợi nhuận {margin.toFixed(1)}%
+          <span className="text-muted-foreground font-normal ml-2">· Biên lợi nhuận {margin.toFixed(1)}%</span>
         </p>
-        <p className="text-[11px] text-zinc-600">
-          Doanh thu {formatVND(revenue)} − Chi phí {formatVND(expense)} = <strong className="text-zinc-900">{formatVND(revenue - expense)}</strong>
+        <p className="text-xs text-muted-foreground mt-1">
+          Doanh thu {formatVND(revenue)} − Chi phí {formatVND(expense)} = <strong className="text-foreground">{formatVND(revenue - expense)}</strong>
         </p>
       </div>
     </div>
@@ -539,10 +543,10 @@ export default function PlanWizardPage() {
               <div className="flex items-center gap-3">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${
                   cfo.feasibility === "Khả thi"
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                     : cfo.feasibility === "Cần điều chỉnh"
-                    ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800"
-                    : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800"
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : "bg-red-50 text-red-700 border-red-200"
                 }`}>
                   {cfo.feasibility === "Khả thi" ? <CheckCircle2 className="w-3.5 h-3.5" /> :
                    cfo.feasibility === "Cần điều chỉnh" ? <AlertTriangle className="w-3.5 h-3.5" /> :
@@ -568,8 +572,8 @@ export default function PlanWizardPage() {
                     </h3>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                       Math.abs(budgetTotalPercent - 100) < 0.5
-                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
-                        : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-red-100 text-red-700"
                     }`}>
                       Tổng: {budgetTotalPercent.toFixed(0)}%
                     </span>
@@ -635,7 +639,7 @@ export default function PlanWizardPage() {
                   </h3>
                   <div className="space-y-2">
                     {cfo.risks.map((risk, i) => (
-                      <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-amber-50/50 border border-amber-100 dark:bg-amber-950/10 dark:border-amber-900/30">
+                      <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-amber-50/50 border border-amber-100">
                         <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
                         <p className="text-sm text-foreground leading-relaxed">{risk}</p>
                       </div>
@@ -862,11 +866,11 @@ export default function PlanWizardPage() {
                             <td className="py-2 text-foreground">{item.departments.join(", ")}</td>
                             <td className="py-2">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                item.priority === "Cao" || item.priority === "High"
-                                  ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
-                                  : item.priority === "Trung bình" || item.priority === "Medium"
-                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                                item.priority.includes("Cao") || item.priority.includes("High")
+                                  ? "bg-red-100 text-red-700"
+                                  : item.priority.includes("Trung bình") || item.priority.includes("Medium")
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-emerald-100 text-emerald-700"
                               }`}>
                                 {item.priority}
                               </span>
