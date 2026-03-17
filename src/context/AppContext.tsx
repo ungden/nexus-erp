@@ -30,6 +30,8 @@ export interface Task {
   priority: TaskPriority;
   status: TaskStatus;
   department: string;
+  bonusAmount?: number;
+  roadmapNodeId?: string;
 }
 
 export interface Employee {
@@ -218,6 +220,8 @@ function mapTask(row: any): Task {
     priority: row.priority,
     status: row.status,
     department: row.department,
+    bonusAmount: row.bonus_amount,
+    roadmapNodeId: row.roadmap_node_id,
   };
 }
 
@@ -230,6 +234,8 @@ function toDbTask(t: Task): Record<string, unknown> {
     priority: t.priority,
     status: t.status,
     department: t.department,
+    bonus_amount: t.bonusAmount ?? 0,
+    roadmap_node_id: t.roadmapNodeId ?? null,
   };
 }
 

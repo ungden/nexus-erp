@@ -99,6 +99,7 @@ export interface RoadmapNode {
   personalKPI?: string;
   bonusPercent?: number;   // % lương cơ bản
   bonusAmount?: number;    // Số tiền thưởng
+  syncedToTasks?: boolean; // Đã đồng bộ sang ERP chưa
   // Thời gian
   startDate?: string;
   endDate?: string;

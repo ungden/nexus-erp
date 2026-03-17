@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { CheckSquare, Clock, Plus, Calendar, X, Edit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAppContext, Task, TaskStatus, TaskPriority } from '@/context/AppContext';
+import { useAppContext, Task, TaskStatus, TaskPriority, PayrollRecord } from '@/context/AppContext';
+import { formatVND, formatNumber } from '@/lib/format';
 
 const statuses: { id: TaskStatus; name: string; color: string }[] = [
   { id: 'todo', name: 'Cần làm', color: 'bg-muted/50 text-gray-800 border-border' },
@@ -12,7 +13,7 @@ const statuses: { id: TaskStatus; name: string; color: string }[] = [
 ];
 
 export default function Tasks() {
-  const { tasks, setTasks, employees } = useAppContext();
+  const { tasks, setTasks, employees, setPayrolls } = useAppContext();
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'mine'>('all');
@@ -42,36 +43,113 @@ export default function Tasks() {
     e.preventDefault();
   };
 
+  const handlePayrollUpdate = (employeeId: number, amountDelta: number) => {
+    if (amountDelta === 0) return;
+
+    const now = new Date();
+    const currentMonth = `${now.getMonth() + 1}`.padStart(2, '0') + '/' + now.getFullYear();
+    const employee = employees.find(e => e.id === employeeId);
+    const baseSalary = employee?.baseSalary || 0;
+
+    setPayrolls(prev => {
+      const existingIndex = prev.findIndex(p => p.employeeId === employeeId && p.month === currentMonth);
+      if (existingIndex >= 0) {
+        const existing = prev[existingIndex];
+        const newKpiBonus = existing.kpiBonus + amountDelta;
+        const newTotal = existing.base + existing.commission + newKpiBonus - existing.deduction;
+        
+        const newPayrolls = [...prev];
+        newPayrolls[existingIndex] = {
+          ...existing,
+          kpiBonus: newKpiBonus,
+          total: newTotal
+        };
+        return newPayrolls;
+      } else {
+        if (amountDelta <= 0) return prev; // Avoid creating with negative bonus
+        const newPayroll: PayrollRecord = {
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          employeeId: employeeId,
+          month: currentMonth,
+          base: baseSalary,
+          commission: 0,
+          kpiBonus: amountDelta,
+          deduction: 0,
+          total: baseSalary + amountDelta,
+          status: 'Chờ duyệt'
+        };
+        return [...prev, newPayroll];
+      }
+    });
+  };
+
+  const updateTaskStatus = (task: Task, newStatus: TaskStatus) => {
+    if (task.status === newStatus) return;
+    
+    if (task.bonusAmount && task.bonusAmount > 0) {
+      if (task.status !== 'done' && newStatus === 'done') {
+        handlePayrollUpdate(task.assigneeId, task.bonusAmount);
+      } else if (task.status === 'done' && newStatus !== 'done') {
+        handlePayrollUpdate(task.assigneeId, -task.bonusAmount);
+      }
+    }
+  };
+
   const handleDrop = (e: React.DragEvent, newStatus: TaskStatus) => {
     const taskId = e.dataTransfer.getData('taskId');
-    setTasks(tasks.map(task => task.id === taskId ? { ...task, status: newStatus } : task));
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    updateTaskStatus(task, newStatus);
+    setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
   };
 
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTask.title || !newTask.assigneeId) return;
     
+    const parsedBonus = newTask.bonusAmount ? Number(newTask.bonusAmount.toString().replace(/\./g, '')) : undefined;
+    const newStatus = (newTask.status as TaskStatus) || 'todo';
+    const newAssigneeId = Number(newTask.assigneeId);
+
     if (editingTask) {
+      // Revert old bonus if task was previously marked 'done'
+      if (editingTask.status === 'done' && editingTask.bonusAmount && editingTask.bonusAmount > 0) {
+        handlePayrollUpdate(editingTask.assigneeId, -editingTask.bonusAmount);
+      }
+      
+      // Apply new bonus if task is now 'done'
+      if (newStatus === 'done' && parsedBonus && parsedBonus > 0) {
+        handlePayrollUpdate(newAssigneeId, parsedBonus);
+      }
+
       setTasks(tasks.map(t => t.id === editingTask.id ? {
         ...t,
         title: newTask.title!,
-        assigneeId: Number(newTask.assigneeId),
+        assigneeId: newAssigneeId,
         dueDate: newTask.dueDate || t.dueDate,
         priority: (newTask.priority as TaskPriority) || t.priority,
-        status: (newTask.status as TaskStatus) || t.status,
+        status: newStatus,
         department: newTask.department || t.department,
+        bonusAmount: parsedBonus,
       } : t));
       setEditingTask(null);
     } else {
       const task: Task = {
         id: Date.now().toString(),
         title: newTask.title,
-        assigneeId: Number(newTask.assigneeId),
+        assigneeId: newAssigneeId,
         dueDate: newTask.dueDate || new Date().toLocaleDateString('vi-VN'),
         priority: (newTask.priority as TaskPriority) || 'medium',
-        status: (newTask.status as TaskStatus) || 'todo',
+        status: newStatus,
         department: newTask.department || 'Chung',
+        bonusAmount: parsedBonus,
       };
+
+      if (task.status === 'done' && task.bonusAmount && task.bonusAmount > 0) {
+        handlePayrollUpdate(task.assigneeId, task.bonusAmount);
+      }
+
       setTasks([...tasks, task]);
     }
     
@@ -87,21 +165,31 @@ export default function Tasks() {
       dueDate: task.dueDate,
       priority: task.priority,
       status: task.status,
-      department: task.department
+      department: task.department,
+      bonusAmount: task.bonusAmount
     });
     setIsModalOpen(true);
   };
 
   const deleteTask = (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa công việc này?')) {
+      const task = tasks.find(t => t.id === id);
+      if (task && task.status === 'done' && task.bonusAmount && task.bonusAmount > 0) {
+        handlePayrollUpdate(task.assigneeId, -task.bonusAmount);
+      }
       setTasks(tasks.filter(t => t.id !== id));
     }
   };
 
   const toggleTaskStatus = (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    const newStatus = task.status === 'done' ? 'todo' : 'done';
+    
+    updateTaskStatus(task, newStatus);
     setTasks(tasks.map(t => {
       if (t.id === id) {
-        return { ...t, status: t.status === 'done' ? 'todo' : 'done' };
+        return { ...t, status: newStatus };
       }
       return t;
     }));
@@ -187,7 +275,7 @@ export default function Tasks() {
                       <p className={`text-sm font-medium ${task.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                         {task.title}
                       </p>
-                      <div className="flex items-center mt-1 text-xs text-muted-foreground space-x-4">
+                      <div className="flex flex-wrap items-center mt-1 text-xs text-muted-foreground gap-x-4 gap-y-2">
                         <span className="flex items-center">
                           <div className="h-4 w-4 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold mr-1 text-[10px]">
                             {getEmployeeInfo(task.assigneeId).name.charAt(0)}
@@ -199,6 +287,11 @@ export default function Tasks() {
                           {task.dueDate}
                         </span>
                         <span>{task.department}</span>
+                        {task.bonusAmount && task.bonusAmount > 0 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">
+                            💰 Thưởng: +{formatVND(task.bonusAmount, 'full')}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -249,7 +342,7 @@ export default function Tasks() {
                       key={task.id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, task.id)}
-                      className="glass-card p-4 cursor-grab active:cursor-grabbing hover:border-primary transition-colors group relative"
+                      className="glass-card p-4 cursor-grab active:cursor-grabbing hover:border-primary transition-colors group relative flex flex-col"
                     >
                       <div className="flex justify-between items-start mb-2">
                         <h4 className={`text-sm font-medium pr-12 ${task.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</h4>
@@ -262,7 +355,14 @@ export default function Tasks() {
                           </button>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between mt-4">
+
+                      {task.bonusAmount && task.bonusAmount > 0 ? (
+                        <div className="mb-2 w-fit inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">
+                          💰 Thưởng: +{formatVND(task.bonusAmount, 'full')}
+                        </div>
+                      ) : null}
+
+                      <div className="flex items-center justify-between mt-auto pt-2">
                         <div className="flex items-center text-xs text-muted-foreground">
                           <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold mr-2 text-[10px]">
                             {getEmployeeInfo(task.assigneeId).name.charAt(0)}
@@ -289,7 +389,7 @@ export default function Tasks() {
       {/* Add/Edit Task Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-md shadow-xl">
+          <div className="glass-card p-6 w-full max-w-md shadow-xl overflow-y-auto max-h-[90vh]">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-foreground">{editingTask ? 'Chỉnh sửa công việc' : 'Giao việc mới'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground/70 hover:text-muted-foreground">
@@ -343,6 +443,37 @@ export default function Tasks() {
                     <option value="medium">Trung bình</option>
                     <option value="low">Thấp</option>
                   </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Trạng thái</label>
+                  <select 
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    value={newTask.status || 'todo'}
+                    onChange={e => setNewTask({...newTask, status: e.target.value as TaskStatus})}
+                  >
+                    <option value="todo">Cần làm</option>
+                    <option value="in-progress">Đang làm</option>
+                    <option value="done">Hoàn thành</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground/90 mb-1">Mức thưởng (VNĐ)</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    value={newTask.bonusAmount ? formatNumber(Number(newTask.bonusAmount.toString().replace(/\./g, ''))) : ''}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\./g, '');
+                      if (val === '') {
+                        setNewTask({...newTask, bonusAmount: undefined});
+                      } else if (!isNaN(Number(val))) {
+                        setNewTask({...newTask, bonusAmount: Number(val)});
+                      }
+                    }}
+                    placeholder="VD: 500.000"
+                  />
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3">

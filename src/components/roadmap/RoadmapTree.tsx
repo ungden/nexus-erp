@@ -6,10 +6,10 @@ import { RoadmapNode, Roadmap } from "@/lib/roadmap-types"
 import { CashflowBar } from "./CashflowBar"
 import { formatVND } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { useAppContext } from "@/context/AppContext"
+import { useAppContext, Task } from "@/context/AppContext"
 import {
   Sparkles, ArrowLeft, ChevronDown, ChevronRight,
-  Calendar, Target, Users, Loader2, RefreshCw,
+  Calendar, Target, Users, Loader2, RefreshCw, Send, Edit2, X
 } from "lucide-react"
 
 interface Props {
@@ -20,6 +20,18 @@ interface Props {
 type ViewLevel = "year" | "months" | "weeks"
 
 /* ── Helpers ────────────────────────────────────────────── */
+
+function updateNodesInTree(root: RoadmapNode, updates: Record<string, Partial<RoadmapNode>>): RoadmapNode {
+  let newRoot = root
+  if (updates[root.id]) {
+    newRoot = { ...root, ...updates[root.id] }
+  }
+  if (!newRoot.children) return newRoot
+  return {
+    ...newRoot,
+    children: newRoot.children.map(c => updateNodesInTree(c, updates))
+  }
+}
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   healthy: { label: "Khoẻ", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
@@ -47,12 +59,13 @@ function KpiPill({ text }: { text: string }) {
 /* ── Main Component ─────────────────────────────────────── */
 
 export function RoadmapTree({ roadmap, onUpdate }: Props) {
-  const { employees } = useAppContext()
+  const { employees, tasks, setTasks } = useAppContext()
   const tree = roadmap.tree
 
   const [viewLevel, setViewLevel] = useState<ViewLevel>("year")
   const [isGenerating, setIsGenerating] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(0)
+  const [editingTask, setEditingTask] = useState<RoadmapNode | null>(null)
 
   const quarters = tree.children ?? []
   const hasMonths = quarters.some(q => q.children && q.children.length > 0)
@@ -406,6 +419,51 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
     const currentMonth = allMonths[selectedMonth] ?? allMonths[0]
     const weeks = currentMonth?.children ?? []
 
+    // Collect all unsynced tasks in the current month
+    const unsyncedTasks: RoadmapNode[] = []
+    weeks.forEach(week => {
+      (week.children ?? []).forEach(day => {
+        (day.children ?? []).forEach(task => {
+          if (!task.syncedToTasks) {
+            unsyncedTasks.push(task)
+          }
+        })
+      })
+    })
+
+    const handlePushToERP = () => {
+      if (unsyncedTasks.length === 0) return
+
+      const newTasks = unsyncedTasks.map(task => ({
+        id: `t_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        title: task.title,
+        assigneeId: task.assigneeId || 1,
+        dueDate: task.startDate || new Date().toISOString().split('T')[0],
+        priority: 'medium',
+        status: 'todo',
+        department: task.department || 'Chung',
+        bonusAmount: task.bonusAmount || 0,
+        roadmapNodeId: task.id
+      }))
+
+      if (setTasks && tasks) {
+        setTasks([...tasks, ...newTasks] as Task[])
+      } else {
+        console.warn("setTasks or tasks is not available in AppContext")
+      }
+
+      // Update tree to set syncedToTasks = true for these tasks
+      const updates: Record<string, Partial<RoadmapNode>> = {}
+      unsyncedTasks.forEach(t => {
+        updates[t.id] = { syncedToTasks: true }
+      })
+
+      const newTree = updateNodesInTree(roadmap.tree, updates)
+      onUpdate({ ...roadmap, tree: newTree })
+      
+      alert(`Đã đồng bộ ${unsyncedTasks.length} công việc sang ERP thành công!`)
+    }
+
     return (
       <motion.div
         key="weeks"
@@ -422,10 +480,23 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
           <ArrowLeft className="w-4 h-4" /> Quay lại Chi tiết Tháng
         </button>
 
-        <div className="glass-card p-6">
+        <div className="glass-card p-6 flex flex-wrap justify-between items-center gap-4">
           <h2 className="text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
             📋 Lịch công việc chi tiết
           </h2>
+          <button
+            onClick={handlePushToERP}
+            disabled={unsyncedTasks.length === 0}
+            className={cn(
+              "px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-md",
+              unsyncedTasks.length > 0
+                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
+                : "bg-muted text-muted-foreground cursor-not-allowed opacity-70"
+            )}
+          >
+            <Send className="w-4 h-4" />
+            Đồng bộ Thực thi ({unsyncedTasks.length})
+          </button>
         </div>
 
         {/* Month Tab Bar */}
@@ -565,9 +636,13 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
                                 {tasks.map((task) => (
                                   <div
                                     key={task.id}
-                                    className="p-2.5 rounded-xl border bg-white hover:shadow-md hover:-translate-y-0.5 transition-all text-left"
+                                    onClick={() => setEditingTask(task)}
+                                    className="group relative p-2.5 rounded-xl border bg-white hover:shadow-md hover:-translate-y-0.5 transition-all text-left cursor-pointer"
                                   >
-                                    <p className="text-xs font-bold text-foreground line-clamp-1">{task.title}</p>
+                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Edit2 className="w-3.5 h-3.5 text-muted-foreground hover:text-primary" />
+                                    </div>
+                                    <p className="text-xs font-bold text-foreground line-clamp-1 pr-4">{task.title}</p>
                                     {task.personalKPI && (
                                       <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">{task.personalKPI}</p>
                                     )}
@@ -586,6 +661,11 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
                                         </span>
                                       )}
                                     </div>
+                                    {task.syncedToTasks && (
+                                      <div className="mt-2 text-[9px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 w-max px-1.5 py-0.5 rounded-md">
+                                        ✓ Đã đồng bộ
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -602,6 +682,18 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         </AnimatePresence>
       </div>
     )
+  }
+
+  /* ── Handlers ───────────────────────────────────────── */
+
+  function handleSaveTaskEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingTask) return
+
+    const updates = { [editingTask.id]: { ...editingTask } }
+    const newTree = updateNodesInTree(roadmap.tree, updates)
+    onUpdate({ ...roadmap, tree: newTree })
+    setEditingTask(null)
   }
 
   /* ── Render ─────────────────────────────────────────── */
@@ -640,6 +732,95 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         {viewLevel === "year" && <YearView />}
         {viewLevel === "months" && <MonthsView />}
         {viewLevel === "weeks" && <WeeksView />}
+      </AnimatePresence>
+
+      {/* Edit Task Modal */}
+      <AnimatePresence>
+        {editingTask && (
+          <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden"
+            >
+              <div className="p-6 border-b flex justify-between items-center">
+                <h3 className="text-xl font-bold text-foreground">Chỉnh sửa công việc</h3>
+                <button onClick={() => setEditingTask(null)} className="p-2 hover:bg-muted rounded-full cursor-pointer transition-colors">
+                  <X className="w-5 h-5 text-muted-foreground" />
+                </button>
+              </div>
+              <form onSubmit={handleSaveTaskEdit} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5 text-foreground">Tên công việc</label>
+                  <input
+                    type="text"
+                    value={editingTask.title}
+                    onChange={e => setEditingTask({ ...editingTask, title: e.target.value })}
+                    className="w-full px-4 py-2 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5 text-foreground">Nhân sự phụ trách</label>
+                  <select
+                    value={editingTask.assigneeId || ""}
+                    onChange={e => {
+                      const empId = Number(e.target.value)
+                      const emp = employees?.find(emp => emp.id === empId)
+                      setEditingTask({
+                        ...editingTask,
+                        assigneeId: empId,
+                        assigneeName: emp ? emp.name : editingTask.assigneeName,
+                        department: emp ? emp.department : editingTask.department,
+                      })
+                    }}
+                    className="w-full px-4 py-2 border border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm cursor-pointer"
+                  >
+                    <option value="">-- Chọn nhân sự --</option>
+                    {employees?.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.department})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5 text-foreground">Thưởng KPI (VNĐ)</label>
+                  <input
+                    type="number"
+                    value={editingTask.bonusAmount || ""}
+                    onChange={e => setEditingTask({ ...editingTask, bonusAmount: Number(e.target.value) })}
+                    className="w-full px-4 py-2 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5 text-foreground">KPI Cá nhân</label>
+                  <input
+                    type="text"
+                    value={editingTask.personalKPI || ""}
+                    onChange={e => setEditingTask({ ...editingTask, personalKPI: e.target.value })}
+                    className="w-full px-4 py-2 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
+                    placeholder="VD: Viết xong 5 bài chuẩn SEO"
+                  />
+                </div>
+                <div className="pt-4 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingTask(null)}
+                    className="px-5 py-2.5 rounded-xl font-semibold hover:bg-muted text-muted-foreground transition-colors cursor-pointer text-sm"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer text-sm"
+                  >
+                    Lưu thay đổi
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </div>
   )
