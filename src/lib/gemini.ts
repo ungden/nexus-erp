@@ -112,7 +112,7 @@ Phân tích CFO:
 - Biên lợi nhuận: ${cfo.budgetAllocation.profit.percent}%
 - Budget HR: ${formatVND(cfo.budgetAllocation.hr.amount)}
 - Budget Marketing: ${formatVND(cfo.budgetAllocation.marketing.amount)}
-- Rủi ro: ${cfo.risks.join(', ')}`;
+- Rủi ro: ${cfo.risks.join(', ')}${profile.feedback ? `\n\nYÊU CẦU ĐIỀU CHỈNH TỪ USER (QUAN TRỌNG):\n${profile.feedback}` : ''}`;
 
   const text = await callGemini(systemPrompt, userPrompt);
   return JSON.parse(text);
@@ -163,7 +163,7 @@ Ngành: ${profile.industry}
 Doanh thu: ${formatVND(profile.revenue)}
 Budget HR: ${formatVND(cfo.budgetAllocation.hr.amount)}/năm
 Chiến lược CEO: ${ceo.vision}
-Q1: ${ceo.quarterlyGoals[0]?.theme} | Q2: ${ceo.quarterlyGoals[1]?.theme} | Q3: ${ceo.quarterlyGoals[2]?.theme} | Q4: ${ceo.quarterlyGoals[3]?.theme}`;
+Q1: ${ceo.quarterlyGoals[0]?.theme} | Q2: ${ceo.quarterlyGoals[1]?.theme} | Q3: ${ceo.quarterlyGoals[2]?.theme} | Q4: ${ceo.quarterlyGoals[3]?.theme}${profile.feedback ? `\n\nYÊU CẦU ĐIỀU CHỈNH TỪ USER (QUAN TRỌNG):\n${profile.feedback}` : ''}`;
 
   const text = await callGemini(systemPrompt, userPrompt);
   return JSON.parse(text);
@@ -188,6 +188,35 @@ export async function generateBoardWithGemini(profile: CompanyProfile): Promise<
     const cfo = await geminiCFO(profile);
     const ceo = await geminiCEO(profile, cfo);
     const hr = await geminiHR(profile, cfo, ceo);
+
+    // FIX MATH: LLMs are bad at math, so recalculate totals to be safe
+    let totalMonthlySalary = 0;
+    let totalHeadcount = 0;
+    
+    if (hr.departments && Array.isArray(hr.departments)) {
+      hr.departments = hr.departments.map(d => {
+        const hc = Number(d.headcount) || 0;
+        const avgS = Number(d.avgSalary) || 0;
+        const totalS = hc * avgS;
+        
+        totalHeadcount += hc;
+        totalMonthlySalary += totalS;
+        
+        return {
+          ...d,
+          headcount: hc,
+          avgSalary: avgS,
+          totalSalary: totalS,
+          description: `${hc} người · Lương TB ${formatVND(avgS)}/tháng`
+        };
+      });
+    }
+
+    hr.totalHeadcount = totalHeadcount;
+    hr.monthlySalary = totalMonthlySalary;
+    hr.monthlyOpex = Number(hr.monthlyOpex) || 0;
+    hr.monthlyFixedCost = totalMonthlySalary + hr.monthlyOpex;
+    hr.yearlyFixedCost = hr.monthlyFixedCost * 12;
 
     const board: BoardAnalysis = { cfo, ceo, hr };
     const tree = fallbackTree(profile, board); // Tree structure from template, data from Gemini

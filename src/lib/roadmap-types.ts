@@ -121,6 +121,7 @@ export interface CompanyProfile {
   headcount: number;
   fixedCost: number;
   products: string;
+  feedback?: string; // MỚI - Feedback từ user để AI điều chỉnh plan
 }
 
 // ---- Roadmap (top-level) ----

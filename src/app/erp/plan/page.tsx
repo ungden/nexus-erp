@@ -107,6 +107,7 @@ export default function PlanWizardPage() {
   const [objective, setObjective] = useState("")
   const [revenue, setRevenue] = useState("")
   const [products, setProducts] = useState("")
+  const [feedback, setFeedback] = useState("")
 
   // ---------- Loading animation ----------
   const [loadStep, setLoadStep] = useState(0)
@@ -139,6 +140,7 @@ export default function PlanWizardPage() {
       headcount: 0,
       fixedCost: 0,
       products,
+      feedback: feedback.trim() || undefined,
     }
 
     // Progressive loading animation
@@ -258,7 +260,9 @@ export default function PlanWizardPage() {
   // ---- Computed cashflow for header ----
   const cashflow = useMemo(() => {
     if (!board) return { revenue: 0, expense: 0 }
-    return { revenue: revenueNum, expense: board.hr.yearlyFixedCost }
+    const { cogs, hr, marketing, operations } = board.cfo.budgetAllocation;
+    const expense = cogs.amount + hr.amount + marketing.amount + operations.amount;
+    return { revenue: revenueNum, expense }
   }, [board, revenueNum])
 
   // ==========================================================
@@ -915,8 +919,31 @@ export default function PlanWizardPage() {
         </motion.div>
       </AnimatePresence>
 
+      {/* AI Feedback */}
+      <div className="pt-8 pb-4 border-t border-border mt-10">
+        <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-primary" /> Yêu cầu AI điều chỉnh lại kế hoạch
+        </h3>
+        <div className="flex gap-3">
+          <Input
+            placeholder="VD: Hãy tăng nhân sự Sales lên 5 người và giảm budget Marketing..."
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+            className="flex-1 bg-white"
+            onKeyDown={(e) => { if (e.key === "Enter" && feedback.trim()) handleAnalyze() }}
+          />
+          <Button 
+            onClick={handleAnalyze}
+            disabled={!feedback.trim()}
+            className="shrink-0 bg-zinc-900 text-white hover:bg-zinc-800"
+          >
+            Tạo lại với AI
+          </Button>
+        </div>
+      </div>
+
       {/* Bottom Actions */}
-      <div className="flex items-center justify-between pt-6 border-t border-border">
+      <div className="flex items-center justify-between pt-6 border-t border-border mt-4">
         <Button variant="ghost" onClick={() => { setScreen("input"); setBoard(null) }} className="gap-2 font-semibold text-sm">
           <ArrowLeft className="w-4 h-4" /> Nhập lại thông tin
         </Button>
