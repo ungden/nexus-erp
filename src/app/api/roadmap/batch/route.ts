@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { batchExpandQuarters, batchExpandMonths } from '@/lib/ai-engine';
 import { RoadmapNode, CompanyProfile, BoardAnalysis } from '@/lib/roadmap-types';
 
+export const maxDuration = 30;
+
 interface BatchRequest {
   action: 'expand-quarters' | 'expand-months';
   tree: RoadmapNode;
@@ -13,7 +15,6 @@ interface BatchRequest {
 export async function POST(request: NextRequest) {
   try {
     const { action, tree, profile, board, employees }: BatchRequest = await request.json();
-    await new Promise(r => setTimeout(r, 1000));
 
     let updatedTree: RoadmapNode;
     if (action === 'expand-quarters') {

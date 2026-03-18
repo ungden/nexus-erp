@@ -17,7 +17,7 @@ function getGenAI(): GoogleGenerativeAI | null {
   return new GoogleGenerativeAI(key);
 }
 
-async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
+async function callGemini(systemPrompt: string, userPrompt: string, maxTokens = 16384): Promise<string> {
   const genAI = getGenAI();
   if (!genAI) throw new Error('No API key');
 
@@ -25,7 +25,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
     model: MODEL_NAME,
     generationConfig: {
       temperature: 1.0,
-      maxOutputTokens: 32768,  // Nâng lên 32K tokens cho không gian suy nghĩ
+      maxOutputTokens: maxTokens,
       responseMimeType: 'application/json',
     },
   });
@@ -81,7 +81,7 @@ Sản phẩm: ${profile.products}
 
 Thiết kế phương án tài chính TỐI ƯU NHẤT cho công ty này.${profile.feedback ? `\n\nYÊU CẦU BỔ SUNG TỪ CEO:\n${profile.feedback}` : ''}`;
 
-  const text = await callGemini(systemPrompt, userPrompt);
+  const text = await callGemini(systemPrompt, userPrompt, 4096);
   return JSON.parse(text);
 }
 
@@ -127,7 +127,7 @@ Phương án CFO đã duyệt:
 
 Xây dựng chiến lược kinh doanh TỐI ƯU NHẤT.${profile.feedback ? `\n\nYÊU CẦU CEO:\n${profile.feedback}` : ''}`;
 
-  const text = await callGemini(systemPrompt, userPrompt);
+  const text = await callGemini(systemPrompt, userPrompt, 8192);
   return JSON.parse(text);
 }
 
@@ -184,9 +184,9 @@ Ngành: ${profile.industry}
 Doanh thu: ${formatVND(profile.revenue)}
 Budget HR: ${formatVND(cfo.budgetAllocation.hr.amount)}/năm
 Chiến lược CEO: ${ceo.vision}
-Q1: ${ceo.quarterlyGoals[0]?.theme} | Q2: ${ceo.quarterlyGoals[1]?.theme} | Q3: ${ceo.quarterlyGoals[2]?.theme} | Q4: ${ceo.quarterlyGoals[3]?.theme}${profile.feedback ? `\n\nYÊU CẦU ĐIỀU CHỈNH TỪ USER (QUAN TRỌNG):\n${profile.feedback}` : ''}`;
+Q1: ${ceo.quarterlyGoals[0]?.theme} | Q2: ${ceo.quarterlyGoals[1]?.theme} | Q3: ${ceo.quarterlyGoals[2]?.theme} | Q4: ${ceo.quarterlyGoals[3]?.theme}${profile.feedback ? `\n\nYÊU CẦU BỔ SUNG:\n${profile.feedback}` : ''}`;
 
-  const text = await callGemini(systemPrompt, userPrompt);
+  const text = await callGemini(systemPrompt, userPrompt, 8192);
   return JSON.parse(text);
 }
 
@@ -205,10 +205,16 @@ export async function generateBoardWithGemini(profile: CompanyProfile): Promise<
   }
 
   try {
-    // Run 3 AI personas sequentially
-    const cfo = await geminiCFO(profile);
-    const ceo = await geminiCEO(profile, cfo);
-    const hr = await geminiHR(profile, cfo, ceo);
+    // Run 3 AI personas sequentially with individual timeout protection
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+      ]);
+
+    const cfo = await withTimeout(geminiCFO(profile), 18000, 'CFO');
+    const ceo = await withTimeout(geminiCEO(profile, cfo), 18000, 'CEO');
+    const hr = await withTimeout(geminiHR(profile, cfo, ceo), 18000, 'HR');
 
     // FIX MATH: LLMs are bad at math, so recalculate totals to be safe
     let totalMonthlySalary = 0;

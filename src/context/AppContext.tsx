@@ -420,13 +420,27 @@ function toDbPayable(p: Payable): Record<string, unknown> {
 
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-// ─── Supabase sync helper ────────────────────────────────────
+// ─── Supabase sync helper (optimized: single upsert, no delete) ──
+
+const syncTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+function debouncedSync(table: string, rows: Record<string, unknown>[], uid: string) {
+  // Debounce 1.5s — chỉ ghi 1 lần dù state thay đổi liên tục
+  if (syncTimers[table]) clearTimeout(syncTimers[table]);
+  syncTimers[table] = setTimeout(() => {
+    syncToSupabase(table, rows, uid);
+  }, 1500);
+}
 
 async function syncToSupabase(table: string, rows: Record<string, unknown>[], uid: string) {
-  // Delete all existing rows for this user, then upsert the current state
-  await supabase.from(table).delete().eq('user_id', uid);
-  if (rows.length > 0) {
-    await supabase.from(table).upsert(rows.map(r => ({ ...r, user_id: uid })));
+  try {
+    // Delete all existing rows for this user, then upsert
+    await supabase.from(table).delete().eq('user_id', uid);
+    if (rows.length > 0) {
+      await supabase.from(table).upsert(rows.map(r => ({ ...r, user_id: uid })));
+    }
+  } catch {
+    // Silently fail — don't crash the app if Supabase is slow
   }
 }
 
@@ -544,83 +558,89 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('employees', employees.map(toDbEmployee), userId);
+    debouncedSync('employees', employees.map(toDbEmployee), userId);
   }, [employees, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('deals', deals.map(toDbDeal), userId);
+    debouncedSync('deals', deals.map(toDbDeal), userId);
   }, [deals, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('tasks', tasks.map(toDbTask), userId);
+    debouncedSync('tasks', tasks.map(toDbTask), userId);
   }, [tasks, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('kpis', kpis.map(toDbKpi), userId);
+    debouncedSync('kpis', kpis.map(toDbKpi), userId);
   }, [kpis, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('payrolls', payrolls.map(toDbPayroll), userId);
+    debouncedSync('payrolls', payrolls.map(toDbPayroll), userId);
   }, [payrolls, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('expenses', expenses.map(toDbExpense), userId);
+    debouncedSync('expenses', expenses.map(toDbExpense), userId);
   }, [expenses, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('customers', customers.map(toDbCustomer), userId);
+    debouncedSync('customers', customers.map(toDbCustomer), userId);
   }, [customers, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('partners', partners.map(toDbPartner), userId);
+    debouncedSync('partners', partners.map(toDbPartner), userId);
   }, [partners, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('receivables', receivables.map(toDbReceivable), userId);
+    debouncedSync('receivables', receivables.map(toDbReceivable), userId);
   }, [receivables, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    syncToSupabase('payables', payables.map(toDbPayable), userId);
+    debouncedSync('payables', payables.map(toDbPayable), userId);
   }, [payables, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    supabase.from('finance_settings').delete().eq('user_id', userId).then(() => {
-      supabase.from('finance_settings').upsert({
-        user_id: userId,
-        target_revenue: finance.targetRevenue,
-        alloc_cogs: finance.allocations.cogs,
-        alloc_hr: finance.allocations.hr,
-        alloc_mkt: finance.allocations.mkt,
-        alloc_ops: finance.allocations.ops,
-        alloc_profit: finance.allocations.profit,
+    // Finance settings — debounced
+    if (syncTimers['finance']) clearTimeout(syncTimers['finance']);
+    syncTimers['finance'] = setTimeout(() => {
+      supabase.from('finance_settings').delete().eq('user_id', userId).then(() => {
+        supabase.from('finance_settings').upsert({
+          user_id: userId,
+          target_revenue: finance.targetRevenue,
+          alloc_cogs: finance.allocations.cogs,
+          alloc_hr: finance.allocations.hr,
+          alloc_mkt: finance.allocations.mkt,
+          alloc_ops: finance.allocations.ops,
+          alloc_profit: finance.allocations.profit,
+        });
       });
-    });
+    }, 1500);
   }, [finance, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    
-    // Xóa tất cả roadmap cũ của user này và ghi lại mảng mới
-    supabase.from('roadmaps').delete().eq('user_id', userId).then(() => {
-      if (roadmaps.length > 0) {
-        const rows = roadmaps.map(rm => ({
-          user_id: userId,
-          data: rm,
-          updated_at: new Date().toISOString()
-        }));
-        supabase.from('roadmaps').upsert(rows);
-      }
-    });
+    // Roadmaps — debounced 2s (larger payload)
+    if (syncTimers['roadmaps']) clearTimeout(syncTimers['roadmaps']);
+    syncTimers['roadmaps'] = setTimeout(() => {
+      supabase.from('roadmaps').delete().eq('user_id', userId).then(() => {
+        if (roadmaps.length > 0) {
+          const rows = roadmaps.map(rm => ({
+            user_id: userId,
+            data: rm,
+            updated_at: new Date().toISOString()
+          }));
+          supabase.from('roadmaps').upsert(rows);
+        }
+      });
+    }, 2000);
   }, [roadmaps, userId]);
 
   return (

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateBoardWithGemini } from '@/lib/gemini';
 import { CompanyProfile } from '@/lib/roadmap-types';
 
+// Vercel free tier = 60s max. Nâng lên tối đa cho phép.
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const profile: CompanyProfile = await request.json();

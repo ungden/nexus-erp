@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { expandNode } from '@/lib/ai-engine';
 import { RoadmapNode, CompanyProfile, BoardAnalysis } from '@/lib/roadmap-types';
 
+export const maxDuration = 15;
+
 interface ExpandRequest {
   node: RoadmapNode;
   profile: CompanyProfile;
@@ -12,7 +14,6 @@ interface ExpandRequest {
 export async function POST(request: NextRequest) {
   try {
     const { node, profile, board, employees }: ExpandRequest = await request.json();
-    await new Promise(resolve => setTimeout(resolve, 600));
     const children = expandNode(node, profile, board, employees);
     return NextResponse.json({ children });
   } catch {
