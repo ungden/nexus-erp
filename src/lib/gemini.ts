@@ -24,8 +24,8 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
   const model = genAI.getGenerativeModel({
     model: MODEL_NAME,
     generationConfig: {
-      temperature: 1.0,  // Gemini 3 khuyến nghị giữ default 1.0
-      maxOutputTokens: 8192,
+      temperature: 1.0,
+      maxOutputTokens: 32768,  // Nâng lên 32K tokens cho không gian suy nghĩ
       responseMimeType: 'application/json',
     },
   });
@@ -42,34 +42,44 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
 // ============================================================
 
 async function geminiCFO(profile: CompanyProfile): Promise<CFOAnalysis> {
-  const systemPrompt = `Bạn là CFO (Giám đốc Tài chính) của một công ty Việt Nam. Phân tích tài chính và trả về JSON.
+  const systemPrompt = `Bạn là CFO hàng đầu Việt Nam với 20 năm kinh nghiệm. Nhiệm vụ: thiết kế PHƯƠNG ÁN TÀI CHÍNH TỐI ƯU NHẤT.
 
-PHẢI trả về đúng JSON format sau (không có markdown, không có giải thích thêm):
+QUAN TRỌNG: 
+- Bạn PHẢI đưa ra phương án KHẢ THI. Luôn set feasibility = "Khả thi".
+- KHÔNG BAO GIỜ nói "Cần điều chỉnh" hay "Rủi ro cao". Thay vào đó, hãy TỐI ƯU phân bổ ngân sách để phương án luôn khả thi.
+- Biên lợi nhuận PHẢI từ 15-25% tuỳ ngành.
+- Phân tích analysis phải nêu rõ TẠI SAO phương án này tối ưu, điểm mạnh là gì.
+- Mục risks: nêu rủi ro tiềm ẩn VÀ cách phòng ngừa cụ thể.
+
+JSON format (KHÔNG markdown, KHÔNG giải thích ngoài JSON):
 {
-  "feasibility": "Khả thi" | "Cần điều chỉnh" | "Rủi ro cao",
-  "analysis": "Phân tích tổng quan 2-3 câu bằng tiếng Việt",
+  "feasibility": "Khả thi",
+  "analysis": "3-5 câu tiếng Việt giải thích tại sao phương án tài chính này là tối ưu nhất cho công ty",
   "budgetAllocation": {
-    "cogs": { "percent": number, "amount": number, "note": "string" },
-    "hr": { "percent": number, "amount": number, "note": "string" },
-    "marketing": { "percent": number, "amount": number, "note": "string" },
-    "operations": { "percent": number, "amount": number, "note": "string" },
-    "profit": { "percent": number, "amount": number, "note": "string" }
+    "cogs": { "percent": number, "amount": number, "note": "giải thích chi tiết" },
+    "hr": { "percent": number, "amount": number, "note": "giải thích" },
+    "marketing": { "percent": number, "amount": number, "note": "giải thích" },
+    "operations": { "percent": number, "amount": number, "note": "giải thích" },
+    "profit": { "percent": number, "amount": number, "note": "giải thích" }
   },
   "monthlyBurnRate": number,
   "breakEvenMonth": number,
-  "risks": ["rủi ro 1", "rủi ro 2", "rủi ro 3"]
+  "risks": ["rủi ro 1 + cách phòng ngừa", "rủi ro 2 + cách phòng ngừa", "rủi ro 3 + cách phòng ngừa"]
 }
 
-Tổng % của 5 mục budgetAllocation PHẢI bằng 100.
-amount = revenue * percent / 100.
-monthlyBurnRate = tổng chi phí hàng tháng (không tính lợi nhuận).
-breakEvenMonth = tháng bắt đầu có lợi nhuận tích lũy dương.`;
+TOÁN HỌC BẮT BUỘC:
+- Tổng 5 percent = 100
+- amount = doanh_thu × percent / 100  
+- monthlyBurnRate = (tổng 4 mục chi phí) / 12
+- profit.percent >= 15`;
 
   const userPrompt = `Công ty: ${profile.companyName}
-Ngành: ${profile.industry}
+Ngành: ${profile.industry}  
 Mục tiêu: ${profile.objective}
-Doanh thu mục tiêu năm: ${profile.revenue} VNĐ (${formatVND(profile.revenue)})
-Sản phẩm/Dịch vụ: ${profile.products}`;
+Doanh thu mục tiêu: ${formatVND(profile.revenue)} (${profile.revenue} VNĐ)
+Sản phẩm: ${profile.products}
+
+Thiết kế phương án tài chính TỐI ƯU NHẤT cho công ty này.${profile.feedback ? `\n\nYÊU CẦU BỔ SUNG TỪ CEO:\n${profile.feedback}` : ''}`;
 
   const text = await callGemini(systemPrompt, userPrompt);
   return JSON.parse(text);
@@ -80,39 +90,42 @@ Sản phẩm/Dịch vụ: ${profile.products}`;
 // ============================================================
 
 async function geminiCEO(profile: CompanyProfile, cfo: CFOAnalysis): Promise<CEOStrategy> {
-  const systemPrompt = `Bạn là CEO của một công ty Việt Nam. Dựa vào phân tích tài chính của CFO, xây dựng chiến lược kinh doanh. Trả về JSON.
+  const systemPrompt = `Bạn là CEO tài ba nhất Việt Nam. Dựa vào phương án tài chính đã được CFO tối ưu, hãy xây dựng CHIẾN LƯỢC KINH DOANH TỐI ƯU NHẤT.
 
-PHẢI trả về đúng JSON format sau:
+Hãy suy nghĩ thật sâu:
+- Vision phải thể hiện tham vọng nhưng thực tế
+- Mỗi quý phải có theme rõ ràng, mục tiêu cụ thể và milestone đo lường được
+- Doanh thu phải tăng dần qua các quý (Q1 thấp nhất, Q4 cao nhất)
+- KPIs phải SMART (đo lường được, có con số cụ thể)
+
+JSON format (KHÔNG markdown):
 {
-  "vision": "Tầm nhìn 1 năm, 2-3 câu tiếng Việt",
+  "vision": "Tầm nhìn 1 năm, 3-5 câu tiếng Việt, thể hiện chiến lược tổng thể",
   "quarterlyGoals": [
     {
       "quarter": 1,
-      "theme": "Chủ đề quý bằng tiếng Việt",
+      "theme": "Chủ đề quý cụ thể, hành động",
       "revenue": number,
-      "keyObjectives": ["mục tiêu 1", "mục tiêu 2", "mục tiêu 3"],
-      "milestones": ["milestone 1", "milestone 2"]
+      "keyObjectives": ["mục tiêu cụ thể có số liệu 1", "mục tiêu 2", "mục tiêu 3"],
+      "milestones": ["milestone đo lường được 1", "milestone 2"]
     }
   ],
-  "companyKPIs": ["KPI 1", "KPI 2", "KPI 3", "KPI 4", "KPI 5", "KPI 6"]
+  "companyKPIs": ["KPI SMART 1", "KPI 2", "KPI 3", "KPI 4", "KPI 5", "KPI 6"]
 }
 
-Tổng revenue 4 quý PHẢI bằng ${profile.revenue}.
-quarterlyGoals phải có đúng 4 phần tử (Q1-Q4).
-Doanh thu nên tăng dần theo quý.`;
+TOÁN HỌC: Tổng revenue 4 quý PHẢI = ${profile.revenue}. Phân bổ tăng dần: Q1~18%, Q2~23%, Q3~28%, Q4~31%.
+quarterlyGoals PHẢI có đúng 4 phần tử.`;
 
-  const userPrompt = `Công ty: ${profile.companyName}
-Ngành: ${profile.industry}
+  const userPrompt = `Công ty: ${profile.companyName} | Ngành: ${profile.industry}
 Mục tiêu: ${profile.objective}
-Doanh thu: ${formatVND(profile.revenue)}
-Sản phẩm: ${profile.products}
+Doanh thu: ${formatVND(profile.revenue)} | Sản phẩm: ${profile.products}
 
-Phân tích CFO:
-- Khả thi: ${cfo.feasibility}
-- Biên lợi nhuận: ${cfo.budgetAllocation.profit.percent}%
-- Budget HR: ${formatVND(cfo.budgetAllocation.hr.amount)}
-- Budget Marketing: ${formatVND(cfo.budgetAllocation.marketing.amount)}
-- Rủi ro: ${cfo.risks.join(', ')}${profile.feedback ? `\n\nYÊU CẦU ĐIỀU CHỈNH TỪ USER (QUAN TRỌNG):\n${profile.feedback}` : ''}`;
+Phương án CFO đã duyệt:
+- Lợi nhuận: ${cfo.budgetAllocation.profit.percent}% (${formatVND(cfo.budgetAllocation.profit.amount)})
+- HR: ${formatVND(cfo.budgetAllocation.hr.amount)} | Marketing: ${formatVND(cfo.budgetAllocation.marketing.amount)}
+- Rủi ro cần lưu ý: ${cfo.risks.join('; ')}
+
+Xây dựng chiến lược kinh doanh TỐI ƯU NHẤT.${profile.feedback ? `\n\nYÊU CẦU CEO:\n${profile.feedback}` : ''}`;
 
   const text = await callGemini(systemPrompt, userPrompt);
   return JSON.parse(text);
@@ -123,19 +136,27 @@ Phân tích CFO:
 // ============================================================
 
 async function geminiHR(profile: CompanyProfile, cfo: CFOAnalysis, ceo: CEOStrategy): Promise<HRPlan> {
-  const systemPrompt = `Bạn là HR Director (Giám đốc Nhân sự) của một công ty Việt Nam. Dựa vào chiến lược CEO và ngân sách CFO, thiết kế bộ máy nhân sự. Trả về JSON.
+  const systemPrompt = `Bạn là HR Director hàng đầu Việt Nam. Thiết kế BỘ MÁY NHÂN SỰ TỐI ƯU NHẤT dựa trên chiến lược CEO và ngân sách CFO.
 
-PHẢI trả về đúng JSON format sau:
+Nguyên tắc:
+- Tổng lương hàng năm KHÔNG ĐƯỢC vượt quá ngân sách HR: ${formatVND(cfo.budgetAllocation.hr.amount)}
+- Mỗi phòng ban phải có ít nhất 1 người
+- Lương phải phù hợp thị trường Việt Nam cho ngành ${profile.industry}
+- totalSalary = headcount × avgSalary (TÍNH ĐÚNG!)
+- monthlySalary = tổng tất cả totalSalary
+- monthlyFixedCost = monthlySalary + monthlyOpex
+
+JSON format:
 {
   "totalHeadcount": number,
   "departments": [
     {
-      "name": "Tên phòng ban tiếng Việt",
+      "name": "Tên phòng ban",
       "headcount": number,
       "avgSalary": number,
       "totalSalary": number,
       "budgetPercent": number,
-      "description": "mô tả ngắn",
+      "description": "mô tả",
       "keyRoles": ["vai trò 1", "vai trò 2"]
     }
   ],
@@ -145,7 +166,7 @@ PHẢI trả về đúng JSON format sau:
   "yearlyFixedCost": number,
   "profitMargin": number,
   "hiringPlan": [
-    { "quarter": 1, "newHires": number, "departments": ["phòng ban"], "priority": "mô tả ưu tiên" }
+    { "quarter": 1, "newHires": number, "departments": ["phòng ban"], "priority": "mô tả" }
   ],
   "compensationPolicy": "Chính sách lương thưởng tiếng Việt",
   "kpiBonusPolicy": "Chính sách thưởng KPI tiếng Việt"
