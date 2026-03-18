@@ -495,6 +495,7 @@ function PipelineTab({
   setDeals: React.Dispatch<React.SetStateAction<Deal[]>>;
   customers: Customer[];
 }) {
+  const { setReceivables } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newDeal, setNewDeal] = useState<Partial<Deal>>({ stage: 'Tiếp cận' });
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
@@ -510,9 +511,26 @@ function PipelineTab({
 
   const handleDrop = (e: React.DragEvent, newStage: Stage) => {
     const dealId = e.dataTransfer.getData('dealId');
+    const deal = deals.find((d) => d.id === dealId);
+
     setDeals((prev) =>
       prev.map((d) => (d.id === dealId ? { ...d, stage: newStage } : d)),
     );
+
+    if (deal && newStage === 'Chốt sale' && deal.stage !== 'Chốt sale') {
+      setReceivables((prev) => [
+        ...prev,
+        {
+          id: 'r_' + Date.now(),
+          customerId: deal.customerId || '',
+          dealId: deal.id,
+          amount: deal.amount,
+          paidAmount: 0,
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          status: 'Chưa thu',
+        },
+      ]);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {

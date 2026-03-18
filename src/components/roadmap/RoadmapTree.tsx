@@ -6,10 +6,10 @@ import { RoadmapNode, Roadmap } from "@/lib/roadmap-types"
 import { CashflowBar } from "./CashflowBar"
 import { formatVND } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { useAppContext, Task } from "@/context/AppContext"
+import { useAppContext, Task, Employee } from "@/context/AppContext"
 import {
   Sparkles, ChevronRight, Calendar, Target, Users,
-  Loader2, RefreshCw, Send, Edit2, X,
+  Loader2, Send, Edit2, X,
 } from "lucide-react"
 
 /* ── Props ────────────────────────────────────────────── */
@@ -86,7 +86,7 @@ function countTasks(node: RoadmapNode): number {
 /* ── Main Component ──────────────────────────────────── */
 
 export function RoadmapTree({ roadmap, onUpdate }: Props) {
-  const { employees, tasks, setTasks } = useAppContext()
+  const { employees, tasks, setTasks, setEmployees } = useAppContext()
   const tree = roadmap.tree
 
   /* Navigation stack — last item is the "active" node ID */
@@ -260,6 +260,37 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
     const quarters = node.children ?? []
     const hasMonths = quarters.some((q) => (q.children?.length ?? 0) > 0)
 
+    function handleSyncHR() {
+      if (!setEmployees || !employees) return;
+      const hrPlan = roadmap.board.hr;
+      if (!hrPlan || !hrPlan.departments) return;
+  
+      let newId = Date.now();
+      const newEmployees: Employee[] = [];
+      
+      hrPlan.departments.forEach((dept) => {
+        // Create 'headcount' number of employees for each department
+        for (let i = 0; i < dept.headcount; i++) {
+          const role = dept.keyRoles[i] || dept.keyRoles[0] || 'Nhân sự';
+          newEmployees.push({
+            id: newId++,
+            name: `${role} (Tuyển mới)`,
+            role: role,
+            department: dept.name,
+            email: '',
+            phone: '',
+            status: 'Đang tuyển',
+            joinDate: new Date().toISOString().split('T')[0],
+            baseSalary: dept.avgSalary,
+            managerId: null
+          });
+        }
+      });
+  
+      setEmployees([...employees, ...newEmployees]);
+      alert(`Đã đồng bộ ${newEmployees.length} vị trí nhân sự sang module HRM!`);
+    }
+
     return (
       <div className="space-y-6">
         {/* Header card */}
@@ -282,6 +313,14 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
               ))}
             </div>
           )}
+          <div className="mt-5 flex gap-3">
+            <button 
+              onClick={handleSyncHR}
+              className="text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-4 py-2 flex items-center gap-1.5 hover:bg-blue-100 transition-colors"
+            >
+              👥 Đồng bộ Cơ cấu Nhân sự sang HRM
+            </button>
+          </div>
         </div>
 
         {/* Quarter cards — 2×2 */}

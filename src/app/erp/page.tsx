@@ -27,15 +27,6 @@ import { useAppContext } from '@/context/AppContext';
 import { formatVND } from '@/lib/format';
 import Link from 'next/link';
 
-const defaultRevenueData = [
-  { name: 'T1', actual: 400, target: 500 },
-  { name: 'T2', actual: 600, target: 600 },
-  { name: 'T3', actual: 800, target: 700 },
-  { name: 'T4', actual: 750, target: 800 },
-  { name: 'T5', actual: 900, target: 900 },
-  { name: 'T6', actual: 950, target: 1000 },
-];
-
 type FinancialTab = 'pnl' | 'balance' | 'cashflow';
 
 // ── Financial table row helper ──────────────────────────────
@@ -133,19 +124,23 @@ export default function Dashboard() {
 
   // ── Revenue chart from roadmap ──────────────────────────────
   const revenueData = useMemo(() => {
-    if (activeRoadmap?.tree?.children && activeRoadmap.tree.children.length >= 4) {
-      const quarters = activeRoadmap.tree.children;
-      return [
-        { name: 'Q1a', actual: Math.round(quarters[0].revenue * 0.45 / 1000000), target: Math.round(quarters[0].revenue * 0.5 / 1000000) },
-        { name: 'Q1b', actual: Math.round(quarters[0].revenue * 0.55 / 1000000), target: Math.round(quarters[0].revenue * 0.5 / 1000000) },
-        { name: 'Q2a', actual: Math.round(quarters[1].revenue * 0.48 / 1000000), target: Math.round(quarters[1].revenue * 0.5 / 1000000) },
-        { name: 'Q2b', actual: Math.round(quarters[1].revenue * 0.52 / 1000000), target: Math.round(quarters[1].revenue * 0.5 / 1000000) },
-        { name: 'Q3', actual: Math.round(quarters[2].revenue * 0.9 / 1000000), target: Math.round(quarters[2].revenue / 1000000) },
-        { name: 'Q4', actual: Math.round(quarters[3].revenue * 0.85 / 1000000), target: Math.round(quarters[3].revenue / 1000000) },
-      ];
-    }
-    return defaultRevenueData;
-  }, [activeRoadmap]);
+    const months = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
+    const targetPerMonth = activeRoadmap ? Math.round(activeRoadmap.company.revenue / 12) : 0;
+    
+    const actualsByMonth = new Array(12).fill(0);
+    deals.filter(d => d.stage === 'Chốt sale').forEach(deal => {
+      const d = new Date(deal.date);
+      if (!isNaN(d.getTime())) {
+        actualsByMonth[d.getMonth()] += deal.amount;
+      }
+    });
+
+    return months.map((m, i) => ({
+      name: m,
+      target: targetPerMonth,
+      actual: actualsByMonth[i]
+    }));
+  }, [activeRoadmap, deals]);
 
   const currentQuarter = useMemo(() => {
     if (!activeRoadmap?.tree?.children || activeRoadmap.tree.children.length === 0) return null;
@@ -216,6 +211,18 @@ export default function Dashboard() {
           Dữ liệu thực tế từ CRM, HRM, và hệ thống chi phí. Cập nhật tự động.
         </p>
       </motion.div>
+
+      {employees.length === 0 && deals.length === 0 && (
+        <div className="glass-card p-6 border-indigo-200 bg-indigo-50/50 mb-6">
+          <h3 className="text-lg font-bold text-indigo-900 mb-2">🚀 Chào mừng CEO! Hãy thiết lập hệ thống:</h3>
+          <ul className="space-y-2 text-sm text-indigo-800">
+            <li className="flex items-center gap-2">1. <a href="/erp/plan" className="underline font-bold">Tạo AI Roadmap</a> để hoạch định mục tiêu và ngân sách.</li>
+            <li className="flex items-center gap-2">2. Vào <a href="/erp/plan/view" className="underline font-bold">Xem Roadmap</a>, đồng bộ cơ cấu nhân sự sang HRM.</li>
+            <li className="flex items-center gap-2">3. Đồng bộ Công việc từ Roadmap sang ERP để nhân viên bắt đầu làm việc.</li>
+            <li className="flex items-center gap-2">4. Tạo Khách hàng & Giao dịch đầu tiên trong CRM để ghi nhận doanh thu!</li>
+          </ul>
+        </div>
+      )}
 
       {/* ── Section 1: Scorecard ─────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
