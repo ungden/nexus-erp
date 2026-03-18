@@ -144,6 +144,40 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
     )
   }
 
+  /* ── HR Auto-sync Helper ────────────────────────────── */
+
+  function ensureEmployeesSynced(): typeof employees {
+    if (employees && employees.length > 0) return employees;
+    if (!setEmployees) return employees;
+    
+    const hrPlan = roadmap.board.hr;
+    if (!hrPlan || !hrPlan.departments) return employees;
+
+    let newId = Date.now();
+    const newEmployees: Employee[] = [];
+    
+    hrPlan.departments.forEach((dept) => {
+      for (let i = 0; i < dept.headcount; i++) {
+        const role = dept.keyRoles[i] || dept.keyRoles[0] || 'Nhân sự';
+        newEmployees.push({
+          id: newId++,
+          name: `${role} (Tuyển mới)`,
+          role: role,
+          department: dept.name,
+          email: '',
+          phone: '',
+          status: 'Đang làm việc', // Mặc định là đang làm việc để giao task được ngay
+          joinDate: new Date().toISOString().split('T')[0],
+          baseSalary: dept.avgSalary,
+          managerId: null
+        });
+      }
+    });
+
+    setEmployees(newEmployees);
+    return newEmployees;
+  }
+
   /* ── API calls ──────────────────────────────────────── */
 
   async function handleExpandQuarters() {
@@ -175,7 +209,8 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
   async function handleExpandMonths() {
     setIsGenerating(true)
     try {
-      const empPayload = employees?.map((e) => ({
+      const activeEmps = ensureEmployeesSynced()
+      const empPayload = activeEmps?.map((e) => ({
         id: e.id,
         name: e.name,
         department: e.department,
@@ -216,10 +251,13 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
     const unsynced = collectUnsyncedTasks(weekNode)
     if (unsynced.length === 0) return
 
+    const activeEmps = ensureEmployeesSynced()
+    const fallbackEmpId = activeEmps && activeEmps.length > 0 ? activeEmps[0].id : 1
+
     const newTasks = unsynced.map((task) => ({
       id: `t_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       title: task.title,
-      assigneeId: task.assigneeId || 1,
+      assigneeId: task.assigneeId || fallbackEmpId,
       dueDate: task.startDate || new Date().toISOString().split("T")[0],
       priority: "medium" as const,
       status: "todo" as const,

@@ -55,6 +55,13 @@ export default function Tasks() {
       const existingIndex = prev.findIndex(p => p.employeeId === employeeId && p.month === currentMonth);
       if (existingIndex >= 0) {
         const existing = prev[existingIndex];
+        
+        // Prevent updates to approved payrolls
+        if (existing.status === 'Đã duyệt') {
+          alert('Bảng lương tháng này đã được duyệt, không thể thay đổi phần thưởng KPI. Vui lòng liên hệ HR.');
+          return prev;
+        }
+
         const newKpiBonus = existing.kpiBonus + amountDelta;
         const newTotal = existing.base + existing.commission + newKpiBonus - existing.deduction;
         
