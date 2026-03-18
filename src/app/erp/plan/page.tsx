@@ -12,7 +12,8 @@ import {
   AlertTriangle, CheckCircle2, XCircle, Edit3,
   BarChart3, Briefcase, UserPlus, BadgePercent, Eye,
 } from "lucide-react"
-import { useAppContext } from "@/context/AppContext"
+import { useAppContext, Employee } from "@/context/AppContext"
+import { generateRoadmapTree, batchExpandQuarters, batchExpandMonths } from '@/lib/ai-engine'
 import {
   CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan,
   RoadmapNode, Roadmap,
@@ -95,7 +96,7 @@ function CashflowHealth({ revenue, expense }: { revenue: number; expense: number
 
 export default function PlanWizardPage() {
   const router = useRouter()
-  const { setFinance, roadmaps, setRoadmaps } = useAppContext()
+  const { setFinance, roadmaps, setRoadmaps, employees, setEmployees } = useAppContext()
 
   // ---------- Screen state ----------
   const [screen, setScreen] = useState<Screen>("input")
@@ -254,13 +255,45 @@ export default function PlanWizardPage() {
       products,
     }
 
+    let newId = Date.now() + Math.floor(Math.random() * 1000);
+    const newEmployees: Employee[] = [];
+    board.hr.departments.forEach((dept) => {
+      for (let i = 0; i < dept.headcount; i++) {
+        const role = dept.keyRoles[i] || dept.keyRoles[0] || 'Nhân sự';
+        newEmployees.push({
+          id: newId++,
+          name: `${role} (Tuyển mới)`,
+          role: role,
+          department: dept.name,
+          email: '',
+          phone: '',
+          status: 'Đang làm việc', // Must be "Đang làm việc" to receive tasks
+          joinDate: new Date().toISOString().split('T')[0],
+          baseSalary: dept.avgSalary,
+          managerId: null
+        });
+      }
+    });
+
+    const isActive = roadmaps.length === 0;
+    const mergedEmployees = [...(employees || []), ...newEmployees];
+    if (isActive && setEmployees) {
+      setEmployees(mergedEmployees);
+    }
+
+    let fullTree = generateRoadmapTree(profile, board);
+    fullTree = batchExpandQuarters(fullTree, profile, board);
+    fullTree = batchExpandMonths(fullTree, profile, board, mergedEmployees.map(e => ({
+      id: e.id, name: e.name, department: e.department, role: e.role, baseSalary: e.baseSalary
+    })));
+
     const newRoadmap: Roadmap = {
       id: `rm_${Date.now()}`,
       name: `Kịch bản: ${objective}`,
-      isActive: roadmaps.length === 0, // Make active if it's the first one
+      isActive, // Make active if it's the first one
       company: profile,
       board,
-      tree,
+      tree: fullTree,
       generatedAt
     };
     setRoadmaps([...roadmaps, newRoadmap]);

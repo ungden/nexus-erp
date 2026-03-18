@@ -8,8 +8,8 @@ import { formatVND } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useAppContext, Task, Employee } from "@/context/AppContext"
 import {
-  Sparkles, ChevronRight, Calendar, Target, Users,
-  Loader2, Send, Edit2, X,
+  ChevronRight, Calendar, Target, Users,
+  Send, Edit2, X,
 } from "lucide-react"
 
 /* ── Props ────────────────────────────────────────────── */
@@ -91,7 +91,6 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
 
   /* Navigation stack — last item is the "active" node ID */
   const [navStack, setNavStack] = useState<string[]>([tree.id])
-  const [isGenerating, setIsGenerating] = useState(false)
   const [editingTask, setEditingTask] = useState<RoadmapNode | null>(null)
 
   /* Sync navStack when tree root ID changes (e.g. after generation or roadmap switch) */
@@ -178,68 +177,6 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
     return newEmployees;
   }
 
-  /* ── API calls ──────────────────────────────────────── */
-
-  async function handleExpandQuarters() {
-    setIsGenerating(true)
-    try {
-      const res = await fetch("/api/roadmap/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "expand-quarters",
-          tree,
-          profile: roadmap.company,
-          board: roadmap.board,
-        }),
-      })
-      const data = await res.json()
-      if (data.tree) {
-        // Do NOT reset navStack! Parent IDs (Quarters) remain the same.
-        // If we reset, the user is thrown back to the Year view unexpectedly.
-        onUpdate({ ...roadmap, tree: data.tree })
-      }
-    } catch (e) {
-      console.error("Batch expand quarters failed", e)
-    } finally {
-      setIsGenerating(false)
-    }
-  }
-
-  async function handleExpandMonths() {
-    setIsGenerating(true)
-    try {
-      const activeEmps = ensureEmployeesSynced()
-      const empPayload = activeEmps?.map((e) => ({
-        id: e.id,
-        name: e.name,
-        department: e.department,
-        role: e.role,
-        baseSalary: e.baseSalary ?? 0,
-      }))
-      const res = await fetch("/api/roadmap/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "expand-months",
-          tree: roadmap.tree,
-          profile: roadmap.company,
-          board: roadmap.board,
-          employees: empPayload,
-        }),
-      })
-      const data = await res.json()
-      if (data.tree) {
-        // Do NOT reset navStack! Month IDs remain the same.
-        onUpdate({ ...roadmap, tree: data.tree })
-      }
-    } catch (e) {
-      console.error("Batch expand months failed", e)
-    } finally {
-      setIsGenerating(false)
-    }
-  }
-
   /* ── Sync to ERP ────────────────────────────────────── */
 
   function collectUnsyncedTasks(node: RoadmapNode): RoadmapNode[] {
@@ -295,38 +232,6 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
 
   function YearView({ node }: { node: RoadmapNode }) {
     const quarters = node.children ?? []
-    const hasMonths = quarters.some((q) => (q.children?.length ?? 0) > 0)
-
-    function handleSyncHR() {
-      if (!setEmployees || !employees) return;
-      const hrPlan = roadmap.board.hr;
-      if (!hrPlan || !hrPlan.departments) return;
-  
-      let newId = Date.now();
-      const newEmployees: Employee[] = [];
-      
-      hrPlan.departments.forEach((dept) => {
-        // Create 'headcount' number of employees for each department
-        for (let i = 0; i < dept.headcount; i++) {
-          const role = dept.keyRoles[i] || dept.keyRoles[0] || 'Nhân sự';
-          newEmployees.push({
-            id: newId++,
-            name: `${role} (Tuyển mới)`,
-            role: role,
-            department: dept.name,
-            email: '',
-            phone: '',
-            status: 'Đang tuyển',
-            joinDate: new Date().toISOString().split('T')[0],
-            baseSalary: dept.avgSalary,
-            managerId: null
-          });
-        }
-      });
-  
-      setEmployees([...employees, ...newEmployees]);
-      alert(`Đã đồng bộ ${newEmployees.length} vị trí nhân sự sang module HRM!`);
-    }
 
     return (
       <div className="space-y-6">
@@ -350,14 +255,6 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
               ))}
             </div>
           )}
-          <div className="mt-5 flex gap-3">
-            <button 
-              onClick={handleSyncHR}
-              className="text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-4 py-2 flex items-center gap-1.5 hover:bg-blue-100 transition-colors"
-            >
-              👥 Đồng bộ Cơ cấu Nhân sự sang HRM
-            </button>
-          </div>
         </div>
 
         {/* Quarter cards — 2×2 */}
@@ -395,43 +292,6 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
             </button>
           ))}
         </div>
-
-        {/* AI Generate */}
-        {!hasMonths ? (
-          <button
-            disabled={isGenerating}
-            onClick={handleExpandQuarters}
-            className={cn(
-              "w-full py-5 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 transition-all shadow-lg",
-              isGenerating
-                ? "bg-indigo-400 cursor-not-allowed"
-                : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 hover:shadow-xl cursor-pointer",
-            )}
-          >
-            {isGenerating ? (
-              <><Loader2 className="w-5 h-5 animate-spin" /> AI đang tạo chi tiết 12 tháng…</>
-            ) : (
-              <><Sparkles className="w-5 h-5" /> AI Generate chi tiết 12 tháng</>
-            )}
-          </button>
-        ) : (
-          <div className="flex flex-col items-center gap-3 mt-6 p-6 rounded-2xl border border-emerald-200 bg-emerald-50/50">
-            <div className="flex items-center gap-2 text-emerald-700 font-bold text-lg">
-              <span className="text-2xl">✨</span> AI đã tạo xong chi tiết 12 tháng!
-            </div>
-            <p className="text-sm text-emerald-800/80 font-medium">
-              Click vào từng thẻ Quý ở trên để xem lịch trình, mục tiêu và phân bổ ngân sách chi tiết từng tháng.
-            </p>
-            <button
-              onClick={handleExpandQuarters}
-              disabled={isGenerating}
-              className="mt-2 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5"
-            >
-              {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              {isGenerating ? "Đang tạo lại..." : "Tạo lại kịch bản 12 tháng"}
-            </button>
-          </div>
-        )}
       </div>
     )
   }
@@ -440,7 +300,6 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
 
   function QuarterView({ node }: { node: RoadmapNode }) {
     const months = node.children ?? []
-    const hasWeeks = months.some((m) => (m.children?.length ?? 0) > 0)
 
     return (
       <div className="space-y-6">
@@ -507,43 +366,6 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
             </div>
           )}
         </div>
-
-        {/* AI Generate */}
-        {!hasWeeks && months.length > 0 ? (
-          <button
-            disabled={isGenerating}
-            onClick={handleExpandMonths}
-            className={cn(
-              "w-full py-5 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-3 transition-all shadow-lg",
-              isGenerating
-                ? "bg-indigo-400 cursor-not-allowed"
-                : "bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 hover:shadow-xl cursor-pointer",
-            )}
-          >
-            {isGenerating ? (
-              <><Loader2 className="w-5 h-5 animate-spin" /> AI đang tạo tuần & công việc…</>
-            ) : (
-              <><Sparkles className="w-5 h-5" /> AI Generate tuần & công việc</>
-            )}
-          </button>
-        ) : hasWeeks && months.length > 0 ? (
-          <div className="flex flex-col items-center gap-3 mt-6 p-6 rounded-2xl border border-emerald-200 bg-emerald-50/50">
-            <div className="flex items-center gap-2 text-emerald-700 font-bold text-lg">
-              <span className="text-2xl">✨</span> AI đã tạo xong lịch làm việc chi tiết!
-            </div>
-            <p className="text-sm text-emerald-800/80 font-medium">
-              Click vào từng thẻ Tháng ở trên để xem lịch làm việc theo tuần và giao việc cụ thể cho nhân sự.
-            </p>
-            <button
-              onClick={handleExpandMonths}
-              disabled={isGenerating}
-              className="mt-2 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5"
-            >
-              {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              {isGenerating ? "Đang tạo lại..." : "Tạo lại kịch bản tuần & công việc"}
-            </button>
-          </div>
-        ) : null}
       </div>
     )
   }
@@ -801,24 +623,6 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Loading overlay */}
-      <AnimatePresence>
-        {isGenerating && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center"
-          >
-            <div className="glass-card p-8 flex flex-col items-center gap-4 shadow-2xl">
-              <Loader2 className="w-10 h-10 text-primary animate-spin" />
-              <p className="text-base font-bold text-foreground">AI đang tạo…</p>
-              <p className="text-sm text-muted-foreground">Vui lòng chờ trong giây lát</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Breadcrumb navigation */}
       <Breadcrumb />
 
