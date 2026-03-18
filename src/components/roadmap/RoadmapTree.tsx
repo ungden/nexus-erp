@@ -161,8 +161,8 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
       })
       const data = await res.json()
       if (data.tree) {
-        // Reset nav to root because child IDs changed
-        setNavStack([data.tree.id])
+        // Do NOT reset navStack! Parent IDs (Quarters) remain the same.
+        // If we reset, the user is thrown back to the Year view unexpectedly.
         onUpdate({ ...roadmap, tree: data.tree })
       }
     } catch (e) {
@@ -195,8 +195,7 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
       })
       const data = await res.json()
       if (data.tree) {
-        // Reset nav to root because child IDs changed
-        setNavStack([data.tree.id])
+        // Do NOT reset navStack! Month IDs remain the same.
         onUpdate({ ...roadmap, tree: data.tree })
       }
     } catch (e) {
