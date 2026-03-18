@@ -86,7 +86,7 @@ function countTasks(node: RoadmapNode): number {
 /* ── Main Component ──────────────────────────────────── */
 
 export function RoadmapTree({ roadmap, onUpdate }: Props) {
-  const { employees, tasks, setTasks, setEmployees } = useAppContext()
+  const { employees, tasks, setTasks, setEmployees, kpis, setKpis } = useAppContext()
   const tree = roadmap.tree
 
   /* Navigation stack — last item is the "active" node ID */
@@ -179,6 +179,28 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
 
   /* ── Sync to ERP ────────────────────────────────────── */
 
+  function handlePushKpisToERP() {
+    const sKpis = roadmap.board.ceo.structuredKpis
+    if (!sKpis || !setKpis || !kpis) return
+    
+    const newKpis = sKpis.filter(sk => !kpis.some(k => k.id === sk.id)).map(sk => ({
+      id: sk.id,
+      title: sk.title,
+      target: sk.target,
+      current: 0,
+      progress: 0,
+      status: "on-track" as const,
+      department: "Chung"
+    }))
+    
+    if (newKpis.length > 0) {
+      setKpis([...kpis, ...newKpis])
+      alert(`Đã đồng bộ ${newKpis.length} KPIs sang ERP!`)
+    } else {
+      alert("Tất cả KPIs đã được đồng bộ từ trước.")
+    }
+  }
+
   function collectUnsyncedTasks(node: RoadmapNode): RoadmapNode[] {
     if (node.level === "task" && !node.syncedToTasks) return [node]
     return (node.children ?? []).flatMap((c) => collectUnsyncedTasks(c))
@@ -201,6 +223,8 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
       department: task.department || "Chung",
       bonusAmount: task.bonusAmount || 0,
       roadmapNodeId: task.id,
+      linkedKpiId: task.linkedKpiId,
+      kpiContribution: task.kpiContribution,
     }))
 
     if (setTasks && tasks) {
@@ -253,6 +277,16 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
                   <Target className="w-3 h-3" /> {kpi}
                 </span>
               ))}
+            </div>
+          )}
+          {roadmap.board.ceo.structuredKpis && roadmap.board.ceo.structuredKpis.length > 0 && (
+            <div className="mt-4">
+              <button
+                onClick={() => handlePushKpisToERP()}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700 transition-colors"
+              >
+                Đồng bộ {roadmap.board.ceo.structuredKpis.length} KPIs chiến lược sang ERP
+              </button>
             </div>
           )}
         </div>

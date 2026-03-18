@@ -166,10 +166,16 @@ export function generateCEOStrategy(profile: CompanyProfile, cfo: CFOAnalysis): 
     };
   });
 
+  const companyKPIs = pick(kb.kpiPool, 6);
   return {
     vision: `${profile.companyName} sẽ đạt ${formatVND(rev)} doanh thu trong năm, tập trung vào "${profile.objective}" với biên lợi nhuận ${cfo.budgetAllocation.profit.percent}%. Chiến lược: tăng trưởng nhanh Q1-Q2, bứt phá Q3, consolidate Q4.`,
     quarterlyGoals,
-    companyKPIs: pick(kb.kpiPool, 6),
+    companyKPIs,
+    structuredKpis: companyKPIs.map(title => ({
+      id: Math.floor(Math.random() * 1000000),
+      title,
+      target: Math.floor(Math.random() * 50) + 10,
+    })),
   };
 }
 
@@ -377,6 +383,8 @@ export function expandDay(node: RoadmapNode, profile: CompanyProfile, board: Boa
     const bonusPct = isRevTask ? 15 + Math.floor(Math.random() * 6) : 5 + Math.floor(Math.random() * 6);
     const bonusAmt = assignee ? Math.round(assignee.baseSalary * bonusPct / 100 / 22) : 0; // Daily bonus = monthly * pct / 22 working days
 
+    const kpi = board.ceo.structuredKpis ? board.ceo.structuredKpis[Math.floor(Math.random() * board.ceo.structuredKpis.length)] : undefined;
+
     return {
       id: rid(), level: 'task' as const,
       title,
@@ -385,6 +393,8 @@ export function expandDay(node: RoadmapNode, profile: CompanyProfile, board: Boa
       assigneeId: assignee?.id,
       assigneeName: assignee ? `${assignee.name} (${assignee.department})` : undefined,
       personalKPI: isRevTask ? `Doanh thu: ${formatVND(tRev)}` : `Hoàn thành đúng hạn`,
+      linkedKpiId: kpi?.id,
+      kpiContribution: kpi ? 1 : 0,
       bonusPercent: bonusPct,
       bonusAmount: bonusAmt,
       startDate: node.startDate,

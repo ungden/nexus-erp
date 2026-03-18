@@ -42,6 +42,7 @@ export interface CEOStrategy {
   vision: string;
   quarterlyGoals: QuarterGoal[];
   companyKPIs: string[];
+  structuredKpis?: { id: number; title: string; target: number }[];
 }
 
 export interface DepartmentPlan {
@@ -97,6 +98,8 @@ export interface RoadmapNode {
   assigneeId?: number;
   assigneeName?: string;
   personalKPI?: string;
+  linkedKpiId?: number;
+  kpiContribution?: number;
   bonusPercent?: number;   // % lương cơ bản
   bonusAmount?: number;    // Số tiền thưởng
   syncedToTasks?: boolean; // Đã đồng bộ sang ERP chưa

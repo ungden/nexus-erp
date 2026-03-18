@@ -32,6 +32,8 @@ export interface Task {
   department: string;
   bonusAmount?: number;
   roadmapNodeId?: string;
+  linkedKpiId?: number;
+  kpiContribution?: number;
 }
 
 export interface Employee {
@@ -223,6 +225,8 @@ function mapTask(row: any): Task {
     department: row.department,
     bonusAmount: row.bonus_amount,
     roadmapNodeId: row.roadmap_node_id,
+    linkedKpiId: row.linked_kpi_id,
+    kpiContribution: row.kpi_contribution,
   };
 }
 
@@ -237,6 +241,8 @@ function toDbTask(t: Task): Record<string, unknown> {
     department: t.department,
     bonus_amount: t.bonusAmount ?? 0,
     roadmap_node_id: t.roadmapNodeId ?? null,
+    linked_kpi_id: t.linkedKpiId ?? null,
+    kpi_contribution: t.kpiContribution ?? 0,
   };
 }
 

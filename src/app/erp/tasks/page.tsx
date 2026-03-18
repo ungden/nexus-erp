@@ -13,7 +13,7 @@ const statuses: { id: TaskStatus; name: string; color: string }[] = [
 ];
 
 export default function Tasks() {
-  const { tasks, setTasks, employees, setPayrolls } = useAppContext();
+  const { tasks, setTasks, employees, setPayrolls, kpis, setKpis } = useAppContext();
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'mine'>('all');
@@ -90,6 +90,27 @@ export default function Tasks() {
     });
   };
 
+  const handleKpiUpdate = (kpiId: number, contribution: number) => {
+    setKpis(prev => prev.map(kpi => {
+      if (kpi.id === kpiId) {
+        const newCurrent = Math.max(0, kpi.current + contribution);
+        const newProgress = Math.min(100, Math.round((newCurrent / kpi.target) * 100));
+        let newStatus = kpi.status;
+        if (newProgress >= 100) newStatus = 'on-track';
+        else if (newProgress < 50) newStatus = 'behind';
+        else newStatus = 'on-track';
+        
+        return {
+          ...kpi,
+          current: newCurrent,
+          progress: newProgress,
+          status: newStatus
+        };
+      }
+      return kpi;
+    }));
+  };
+
   const updateTaskStatus = (task: Task, newStatus: TaskStatus) => {
     if (task.status === newStatus) return;
     
@@ -98,6 +119,14 @@ export default function Tasks() {
         handlePayrollUpdate(task.assigneeId, task.bonusAmount);
       } else if (task.status === 'done' && newStatus !== 'done') {
         handlePayrollUpdate(task.assigneeId, -task.bonusAmount);
+      }
+    }
+
+    if (task.linkedKpiId && task.kpiContribution) {
+      if (task.status !== 'done' && newStatus === 'done') {
+        handleKpiUpdate(task.linkedKpiId, task.kpiContribution);
+      } else if (task.status === 'done' && newStatus !== 'done') {
+        handleKpiUpdate(task.linkedKpiId, -task.kpiContribution);
       }
     }
   };
@@ -124,10 +153,16 @@ export default function Tasks() {
       if (editingTask.status === 'done' && editingTask.bonusAmount && editingTask.bonusAmount > 0) {
         handlePayrollUpdate(editingTask.assigneeId, -editingTask.bonusAmount);
       }
+      if (editingTask.status === 'done' && editingTask.linkedKpiId && editingTask.kpiContribution) {
+        handleKpiUpdate(editingTask.linkedKpiId, -editingTask.kpiContribution);
+      }
       
       // Apply new bonus if task is now 'done'
       if (newStatus === 'done' && parsedBonus && parsedBonus > 0) {
         handlePayrollUpdate(newAssigneeId, parsedBonus);
+      }
+      if (newStatus === 'done' && editingTask.linkedKpiId && editingTask.kpiContribution) {
+        handleKpiUpdate(editingTask.linkedKpiId, editingTask.kpiContribution);
       }
 
       setTasks(tasks.map(t => t.id === editingTask.id ? {
@@ -181,8 +216,13 @@ export default function Tasks() {
   const deleteTask = (id: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa công việc này?')) {
       const task = tasks.find(t => t.id === id);
-      if (task && task.status === 'done' && task.bonusAmount && task.bonusAmount > 0) {
-        handlePayrollUpdate(task.assigneeId, -task.bonusAmount);
+      if (task && task.status === 'done') {
+        if (task.bonusAmount && task.bonusAmount > 0) {
+          handlePayrollUpdate(task.assigneeId, -task.bonusAmount);
+        }
+        if (task.linkedKpiId && task.kpiContribution) {
+          handleKpiUpdate(task.linkedKpiId, -task.kpiContribution);
+        }
       }
       setTasks(tasks.filter(t => t.id !== id));
     }
