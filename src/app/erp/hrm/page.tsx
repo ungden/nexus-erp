@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { Search, Plus, Mail, X, Wallet, TrendingUp, AlertCircle, ChevronRight, ChevronDown } from 'lucide-react';
 import { useAppContext, Employee } from '@/context/AppContext';
 import { formatVND, formatNumber } from '@/lib/format';
@@ -203,64 +204,66 @@ export default function HRM() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-muted/30">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Nhân viên</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Chức vụ / Phòng ban</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Trạng thái</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Lương cơ bản</th>
-                  <th scope="col" className="relative px-6 py-3"><span className="sr-only">Hành động</span></th>
-                </tr>
-              </thead>
-              <tbody className="bg-card divide-y divide-gray-200">
-                {filteredEmployees.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
-                      Không tìm thấy nhân viên nào phù hợp.
-                    </td>
-                  </tr>
-                ) : filteredEmployees.map((person) => (
-                  <tr key={person.id} className="hover:bg-muted/30 transition-colors group">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                            {person.name.charAt(0)}
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-foreground">{person.name}</div>
-                          <div className="text-sm text-muted-foreground flex items-center mt-1">
-                            <Mail className="h-3 w-3 mr-1" /> {person.email}
-                          </div>
+          <div className="p-6">
+            {filteredEmployees.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground border border-dashed border-border rounded-xl">
+                Không tìm thấy nhân viên nào phù hợp.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredEmployees.map((person) => (
+                  <div key={person.id} className="glass-card flex flex-col p-5 hover:shadow-md transition-shadow relative group">
+                    <button 
+                      onClick={() => deleteEmployee(person.id)} 
+                      className="absolute top-4 right-4 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl">
+                        {person.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg text-foreground">{person.name}</h3>
+                        <div className="flex gap-2 mt-1">
+                          <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-blue-100 text-blue-800 rounded">
+                            {person.role}
+                          </span>
+                          <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-purple-100 text-purple-800 rounded">
+                            {person.department}
+                          </span>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-foreground">{person.role}</div>
-                      <div className="text-sm text-muted-foreground">{person.department}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        person.status === 'Đang làm việc' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {person.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground font-medium text-right">
-                      {formatVND(person.baseSalary, 'full')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button onClick={() => deleteEmployee(person.id)} className="text-red-600 hover:text-red-900 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Xóa
-                      </button>
-                    </td>
-                  </tr>
+                    </div>
+                    <div className="space-y-2 mb-6 text-sm">
+                      <div className="flex items-center text-muted-foreground">
+                        <Mail className="h-4 w-4 mr-2" />
+                        <span className="truncate">{person.email}</span>
+                      </div>
+                      {person.phone && (
+                        <div className="flex items-center text-muted-foreground">
+                          <Wallet className="h-4 w-4 mr-2" />
+                          <span>{person.phone}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center text-muted-foreground">
+                        <Wallet className="h-4 w-4 mr-2" />
+                        <span>{formatVND(person.baseSalary, 'full')}</span>
+                      </div>
+                      <div className="flex items-center text-muted-foreground">
+                        <div className={`w-2 h-2 rounded-full mr-2 ${person.status === 'Đang làm việc' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                        <span>{person.status}</span>
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-4 border-t border-border">
+                      <Link href={`/erp/hrm/${person.id}`} className="text-primary hover:text-primary/80 font-medium text-sm flex items-center justify-center w-full group-hover:gap-2 transition-all">
+                        Xem chi tiết hồ sơ <ChevronRight className="h-4 w-4 ml-1" />
+                      </Link>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
         </div>
       ) : (
