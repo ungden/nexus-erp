@@ -608,39 +608,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    // Finance settings — debounced
-    if (syncTimers['finance']) clearTimeout(syncTimers['finance']);
-    syncTimers['finance'] = setTimeout(() => {
-      supabase.from('finance_settings').delete().eq('user_id', userId).then(() => {
-        supabase.from('finance_settings').upsert({
-          user_id: userId,
-          target_revenue: finance.targetRevenue,
-          alloc_cogs: finance.allocations.cogs,
-          alloc_hr: finance.allocations.hr,
-          alloc_mkt: finance.allocations.mkt,
-          alloc_ops: finance.allocations.ops,
-          alloc_profit: finance.allocations.profit,
-        });
+    // Finance settings — save immediately (only changes on scenario approve)
+    supabase.from('finance_settings').delete().eq('user_id', userId).then(() => {
+      supabase.from('finance_settings').upsert({
+        user_id: userId,
+        target_revenue: finance.targetRevenue,
+        alloc_cogs: finance.allocations.cogs,
+        alloc_hr: finance.allocations.hr,
+        alloc_mkt: finance.allocations.mkt,
+        alloc_ops: finance.allocations.ops,
+        alloc_profit: finance.allocations.profit,
       });
-    }, 1500);
+    });
   }, [finance, userId]);
 
   useEffect(() => {
     if (!isLoaded.current || !userId) return;
-    // Roadmaps — debounced 2s (larger payload)
-    if (syncTimers['roadmaps']) clearTimeout(syncTimers['roadmaps']);
-    syncTimers['roadmaps'] = setTimeout(() => {
-      supabase.from('roadmaps').delete().eq('user_id', userId).then(() => {
-        if (roadmaps.length > 0) {
-          const rows = roadmaps.map(rm => ({
-            user_id: userId,
-            data: rm,
-            updated_at: new Date().toISOString()
-          }));
-          supabase.from('roadmaps').upsert(rows);
-        }
-      });
-    }, 2000);
+    // Roadmaps — save IMMEDIATELY (no debounce!)
+    // Roadmaps only change when user explicitly creates/approves/switches scenarios.
+    // Debouncing here causes data loss when navigating away after approve.
+    supabase.from('roadmaps').delete().eq('user_id', userId).then(() => {
+      if (roadmaps.length > 0) {
+        const rows = roadmaps.map(rm => ({
+          user_id: userId,
+          data: rm,
+          updated_at: new Date().toISOString()
+        }));
+        supabase.from('roadmaps').upsert(rows);
+      }
+    });
   }, [roadmaps, userId]);
 
   return (
