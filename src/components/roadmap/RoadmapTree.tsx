@@ -321,7 +321,7 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         </div>
 
         {/* AI Generate */}
-        {!hasMonths && (
+        {!hasMonths ? (
           <button
             disabled={isGenerating}
             onClick={handleExpandQuarters}
@@ -338,6 +338,23 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
               <><Sparkles className="w-5 h-5" /> AI Generate chi tiết 12 tháng</>
             )}
           </button>
+        ) : (
+          <div className="flex flex-col items-center gap-3 mt-6 p-6 rounded-2xl border border-emerald-200 bg-emerald-50/50">
+            <div className="flex items-center gap-2 text-emerald-700 font-bold text-lg">
+              <span className="text-2xl">✨</span> AI đã tạo xong chi tiết 12 tháng!
+            </div>
+            <p className="text-sm text-emerald-800/80 font-medium">
+              Click vào từng thẻ Quý ở trên để xem lịch trình, mục tiêu và phân bổ ngân sách chi tiết từng tháng.
+            </p>
+            <button
+              onClick={handleExpandQuarters}
+              disabled={isGenerating}
+              className="mt-2 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5"
+            >
+              {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              {isGenerating ? "Đang tạo lại..." : "Tạo lại kịch bản 12 tháng"}
+            </button>
+          </div>
         )}
       </div>
     )
@@ -416,7 +433,7 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         </div>
 
         {/* AI Generate */}
-        {!hasWeeks && months.length > 0 && (
+        {!hasWeeks && months.length > 0 ? (
           <button
             disabled={isGenerating}
             onClick={handleExpandMonths}
@@ -433,7 +450,24 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
               <><Sparkles className="w-5 h-5" /> AI Generate tuần & công việc</>
             )}
           </button>
-        )}
+        ) : hasWeeks && months.length > 0 ? (
+          <div className="flex flex-col items-center gap-3 mt-6 p-6 rounded-2xl border border-emerald-200 bg-emerald-50/50">
+            <div className="flex items-center gap-2 text-emerald-700 font-bold text-lg">
+              <span className="text-2xl">✨</span> AI đã tạo xong lịch làm việc chi tiết!
+            </div>
+            <p className="text-sm text-emerald-800/80 font-medium">
+              Click vào từng thẻ Tháng ở trên để xem lịch làm việc theo tuần và giao việc cụ thể cho nhân sự.
+            </p>
+            <button
+              onClick={handleExpandMonths}
+              disabled={isGenerating}
+              className="mt-2 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5"
+            >
+              {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              {isGenerating ? "Đang tạo lại..." : "Tạo lại kịch bản tuần & công việc"}
+            </button>
+          </div>
+        ) : null}
       </div>
     )
   }
