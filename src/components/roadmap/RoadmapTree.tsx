@@ -94,6 +94,13 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [editingTask, setEditingTask] = useState<RoadmapNode | null>(null)
 
+  /* Sync navStack when tree root ID changes (e.g. after generation or roadmap switch) */
+  const treeRootId = tree.id
+  const currentNavRoot = navStack[0]
+  if (currentNavRoot !== treeRootId) {
+    setNavStack([treeRootId])
+  }
+
   /* Derived: current node from the live tree */
   const activeId = navStack[navStack.length - 1]
   const currentNode = useMemo(() => findNode(tree, activeId) ?? tree, [tree, activeId])
@@ -153,7 +160,11 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         }),
       })
       const data = await res.json()
-      if (data.tree) onUpdate({ ...roadmap, tree: data.tree })
+      if (data.tree) {
+        // Reset nav to root because child IDs changed
+        setNavStack([data.tree.id])
+        onUpdate({ ...roadmap, tree: data.tree })
+      }
     } catch (e) {
       console.error("Batch expand quarters failed", e)
     } finally {
@@ -183,7 +194,11 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         }),
       })
       const data = await res.json()
-      if (data.tree) onUpdate({ ...roadmap, tree: data.tree })
+      if (data.tree) {
+        // Reset nav to root because child IDs changed
+        setNavStack([data.tree.id])
+        onUpdate({ ...roadmap, tree: data.tree })
+      }
     } catch (e) {
       console.error("Batch expand months failed", e)
     } finally {
