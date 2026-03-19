@@ -18,6 +18,8 @@ import {
   CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan,
   RoadmapNode, Roadmap,
 } from "@/lib/roadmap-types"
+import { useAuth } from "@/context/AuthContext"
+import { supabase } from "@/lib/supabase"
 import { formatVND, formatNumber } from "@/lib/format"
 
 // ============================================================
@@ -96,6 +98,7 @@ function CashflowHealth({ revenue, expense }: { revenue: number; expense: number
 
 export default function PlanWizardPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const { setFinance, roadmaps, setRoadmaps, employees, setEmployees } = useAppContext()
 
   // ---------- Screen state ----------
@@ -245,8 +248,8 @@ export default function PlanWizardPage() {
   }, [updateHR])
 
   // ---- Approve & navigate ----
-  const handleApprove = () => {
-    if (!board || !tree) return
+  const handleApprove = async () => {
+    if (!board || !tree || !user) return
     const profile: CompanyProfile = {
       companyName, industry, objective,
       revenue: revenueNum,
@@ -296,7 +299,22 @@ export default function PlanWizardPage() {
       tree: fullTree,
       generatedAt
     };
-    setRoadmaps([...roadmaps, newRoadmap]);
+    
+    const newRoadmaps = [...roadmaps, newRoadmap];
+    setRoadmaps(newRoadmaps);
+
+    // Save directly to Supabase to ensure data is not lost when navigating away
+    try {
+      await supabase.from('roadmaps').delete().eq('user_id', user.id);
+      const rows = newRoadmaps.map(rm => ({
+        user_id: user.id,
+        data: rm,
+        updated_at: new Date().toISOString()
+      }));
+      await supabase.from('roadmaps').insert(rows);
+    } catch (err) {
+      console.error('Lỗi khi lưu kịch bản:', err);
+    }
 
     if (newRoadmap.isActive) {
       setFinance({
