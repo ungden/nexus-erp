@@ -113,8 +113,9 @@ export default function PlanWizardPage() {
   const [products, setProducts] = useState("")
   const [feedback, setFeedback] = useState("")
 
-  // ---------- Loading animation ----------
+  // ---------- Loading & thinking ----------
   const [loadStep, setLoadStep] = useState(0)
+  const [thinkingText, setThinkingText] = useState("")
 
   // ---------- Result state ----------
   const [board, setBoard] = useState<BoardAnalysis | null>(null)
@@ -135,6 +136,7 @@ export default function PlanWizardPage() {
   const handleAnalyze = async () => {
     setScreen("loading")
     setLoadStep(0)
+    setThinkingText("")
 
     const profile: CompanyProfile = {
       companyName,
@@ -147,34 +149,59 @@ export default function PlanWizardPage() {
       feedback: feedback.trim() || undefined,
     }
 
-    // Progressive loading animation
-    const t1 = setTimeout(() => setLoadStep(1), 800)
-    const t2 = setTimeout(() => setLoadStep(2), 1800)
-    const t3 = setTimeout(() => setLoadStep(3), 2800)
-
     try {
-      const res = await fetch("/api/roadmap", {
+      const res = await fetch("/api/roadmap/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
       })
 
       if (!res.ok) throw new Error("API failed")
-      const data = await res.json()
 
-      if (!data.board || !data.tree) throw new Error("Invalid response")
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error("No reader")
 
-      // Ensure all 3 animation steps finish visually
-      setLoadStep(3)
-      await new Promise(r => setTimeout(r, 800))
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let resultData: { board: BoardAnalysis; tree: RoadmapNode; generatedAt: string } | null = null
 
-      setBoard(data.board)
-      setTree(data.tree)
-      setGeneratedAt(data.generatedAt)
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
 
-      // Update finance context with CFO allocations
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n\n")
+        buffer = lines.pop() || ""
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue
+          try {
+            const event = JSON.parse(line.slice(6))
+
+            if (event.type === "phase") {
+              if (event.phase === "cfo") { setLoadStep(0); setThinkingText("") }
+              else if (event.phase === "ceo") { setLoadStep(1); setThinkingText("") }
+              else if (event.phase === "hr") { setLoadStep(2); setThinkingText("") }
+              else if (event.phase === "tree") setLoadStep(3)
+              else if (event.phase === "done") setLoadStep(4)
+            } else if (event.type === "thinking") {
+              setThinkingText(event.text)
+            } else if (event.type === "result") {
+              resultData = event.data
+            }
+          } catch { /* skip malformed events */ }
+        }
+      }
+
+      if (!resultData?.board || !resultData?.tree) throw new Error("No result")
+
+      setBoard(resultData.board)
+      setTree(resultData.tree)
+      setGeneratedAt(resultData.generatedAt)
+
+      // Update finance context
       try {
-        const cfo = data.board.cfo as CFOAnalysis
+        const cfo = resultData.board.cfo as CFOAnalysis
         if (cfo?.budgetAllocation) {
           setFinance({
             targetRevenue: revenueNum,
@@ -187,16 +214,12 @@ export default function PlanWizardPage() {
             },
           })
         }
-      } catch { /* ignore finance sync errors */ }
+      } catch { /* ignore */ }
 
       setScreen("results")
     } catch (err) {
       console.error("Roadmap generation failed:", err)
       setScreen("input")
-    } finally {
-      clearTimeout(t1)
-      clearTimeout(t2)
-      clearTimeout(t3)
     }
   }
 
@@ -508,7 +531,7 @@ export default function PlanWizardPage() {
     ]
 
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 py-16 w-full max-w-md mx-auto px-4">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 py-16 w-full max-w-lg mx-auto px-4">
         <div className="relative">
           <div className="absolute inset-0 rounded-full blur-2xl bg-primary/20 animate-pulse" />
           <div className="h-20 w-20 rounded-full bg-background border border-border shadow-md flex items-center justify-center relative z-10">
@@ -529,7 +552,7 @@ export default function PlanWizardPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.15, duration: 0.3 }}
-                className={`flex items-center gap-3 px-5 py-4 rounded-xl border ${
+                className={`flex items-start gap-3 px-5 py-4 rounded-xl border transition-all ${
                   loadStep > i
                     ? "bg-white border-emerald-300"
                     : loadStep === i
@@ -537,20 +560,32 @@ export default function PlanWizardPage() {
                     : "bg-white border-zinc-200"
                 }`}
               >
-                <span className="text-lg">{s.emoji}</span>
-                <span className={`flex-1 text-left ${
-                  loadStep > i ? "text-zinc-900 font-semibold" 
-                  : loadStep === i ? "text-zinc-800" 
-                  : "text-zinc-400"
-                }`}>
-                  {s.text}
-                </span>
+                <span className="text-lg mt-0.5">{s.emoji}</span>
+                <div className="flex-1 text-left min-w-0">
+                  <span className={`block ${
+                    loadStep > i ? "text-zinc-900 font-semibold"
+                    : loadStep === i ? "text-zinc-800"
+                    : "text-zinc-400"
+                  }`}>
+                    {s.text}
+                  </span>
+                  {/* AI Thinking text — real-time from Gemini */}
+                  {loadStep === i && thinkingText && (
+                    <motion.p
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="mt-2 text-xs text-muted-foreground leading-relaxed italic line-clamp-3"
+                    >
+                      {thinkingText}
+                    </motion.p>
+                  )}
+                </div>
                 {loadStep > i ? (
-                  <Check className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <Check className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                 ) : loadStep === i ? (
-                  <span className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0 inline-block" />
+                  <span className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin shrink-0 inline-block mt-0.5" />
                 ) : (
-                  <span className="w-5 h-5 rounded-full border-2 border-zinc-300 shrink-0 inline-block" />
+                  <span className="w-5 h-5 rounded-full border-2 border-zinc-300 shrink-0 inline-block mt-0.5" />
                 )}
               </motion.div>
             ))}
