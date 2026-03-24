@@ -334,70 +334,97 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
 
   function QuarterView({ node }: { node: RoadmapNode }) {
     const months = node.children ?? []
+    const totalTasks = countTasks(node)
 
     return (
       <div className="space-y-6">
         {/* Dashboard header */}
         <div className="glass-card p-6 space-y-4">
-          <h2 className="text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
-            📅 {node.title}
-          </h2>
-          {node.theme && (
-            <p className="text-base font-bold text-indigo-700">🎯 {node.theme}</p>
-          )}
-          <CashflowBar revenue={node.revenue} expense={node.expense} cashflow={node.cashflow} status={node.cashflowStatus} />
-
-          {/* KPIs */}
-          {node.kpis?.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {node.kpis.map((kpi, i) => (
-                <span key={i} className="text-xs font-semibold bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1 flex items-center gap-1.5">
-                  <Target className="w-3 h-3" /> {kpi}
-                </span>
-              ))}
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">📅 {node.title}</h2>
+              {node.theme && <p className="text-base font-bold text-indigo-700 mt-1">🎯 {node.theme}</p>}
             </div>
-          )}
-
-          {/* Milestones */}
-          {(node.milestones?.length ?? 0) > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {node.milestones!.map((ms, i) => (
-                <span key={i} className="text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
-                  🏁 {ms}
-                </span>
-              ))}
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Tổng tasks</p>
+              <p className="text-lg font-bold text-foreground">{totalTasks}</p>
             </div>
-          )}
+          </div>
+
+          {/* Financial summary cards */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
+              <p className="text-[10px] font-bold text-emerald-600 uppercase">Doanh thu</p>
+              <p className="text-lg font-bold text-emerald-800">{formatVND(node.revenue)}</p>
+            </div>
+            <div className="bg-red-50 rounded-xl p-3 border border-red-200">
+              <p className="text-[10px] font-bold text-red-600 uppercase">Chi phí</p>
+              <p className="text-lg font-bold text-red-800">{formatVND(node.expense)}</p>
+            </div>
+            <div className={cn("rounded-xl p-3 border", node.cashflow >= 0 ? "bg-blue-50 border-blue-200" : "bg-red-50 border-red-200")}>
+              <p className="text-[10px] font-bold uppercase" style={{ color: node.cashflow >= 0 ? '#2563eb' : '#dc2626' }}>Dòng tiền</p>
+              <p className="text-lg font-bold" style={{ color: node.cashflow >= 0 ? '#1e40af' : '#991b1b' }}>{node.cashflow >= 0 ? '+' : ''}{formatVND(node.cashflow)}</p>
+            </div>
+          </div>
+
+          {/* KPIs & Milestones */}
+          <div className="flex flex-wrap gap-2">
+            {node.kpis?.map((kpi, i) => (
+              <span key={i} className="text-xs font-semibold bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1 flex items-center gap-1.5">
+                <Target className="w-3 h-3" /> {kpi}
+              </span>
+            ))}
+            {node.milestones?.map((ms, i) => (
+              <span key={`ms-${i}`} className="text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">🏁 {ms}</span>
+            ))}
+          </div>
         </div>
 
-        {/* Month cards — 3-col */}
+        {/* Month timeline columns */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {months.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => navigateTo(m.id)}
-              className="glass-card p-4 flex flex-col gap-2 text-left hover:ring-2 hover:ring-primary/40 transition-all cursor-pointer group"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-foreground">{m.title}</span>
-                <span className="text-xs font-semibold text-muted-foreground">{formatVND(m.revenue)}</span>
-              </div>
-              <p className="text-xs text-muted-foreground line-clamp-1">{m.description}</p>
-              <StatusPill status={m.cashflowStatus} />
-              {m.kpis?.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {m.kpis.slice(0, 2).map((k, i) => <KpiPill key={i} text={k} />)}
+          {months.map((m, mi) => {
+            const mTasks = countTasks(m)
+            const revenueBar = node.revenue > 0 ? Math.round((m.revenue / node.revenue) * 100) : 33
+            return (
+              <button
+                key={m.id}
+                onClick={() => navigateTo(m.id)}
+                className="glass-card p-0 flex flex-col text-left hover:ring-2 hover:ring-primary/40 transition-all cursor-pointer group overflow-hidden"
+              >
+                {/* Revenue bar header */}
+                <div className="relative h-2 bg-muted/30">
+                  <div className="h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-r-full transition-all" style={{ width: `${revenueBar}%` }} />
                 </div>
-              )}
-              <span className="text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity mt-1 flex items-center gap-1">
-                Xem chi tiết <ChevronRight className="w-3 h-3" />
-              </span>
-            </button>
-          ))}
+
+                <div className="p-4 flex flex-col gap-2 flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-base font-bold text-foreground">{m.title}</span>
+                    <StatusPill status={m.cashflowStatus} />
+                  </div>
+
+                  <p className="text-xs text-muted-foreground line-clamp-1">{m.description}</p>
+
+                  {/* Mini financial row */}
+                  <div className="flex items-center gap-3 text-xs mt-1">
+                    <span className="text-emerald-600 font-semibold">+{formatVND(m.revenue)}</span>
+                    <span className="text-red-500 font-semibold">−{formatVND(m.expense)}</span>
+                  </div>
+
+                  {/* Tasks & KPIs */}
+                  <div className="flex items-center gap-2 mt-auto pt-2">
+                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{mTasks} tasks</span>
+                    {m.kpis?.slice(0, 1).map((k, i) => <KpiPill key={i} text={k} />)}
+                  </div>
+
+                  <span className="text-xs text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    Xem chi tiết <ChevronRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </button>
+            )
+          })}
           {months.length === 0 && (
-            <div className="col-span-3 text-center text-muted-foreground text-sm py-4">
-              Chưa có dữ liệu tháng cho quý này.
-            </div>
+            <div className="col-span-3 text-center text-muted-foreground text-sm py-4">Chưa có dữ liệu tháng.</div>
           )}
         </div>
       </div>
@@ -608,13 +635,20 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
               return (
                 <div key={d.id} className="min-w-[300px] w-[300px] shrink-0 bg-muted/30 rounded-2xl flex flex-col max-h-[75vh]">
                   {/* Column Header */}
-                  <div className="p-3 border-b border-border/50 bg-white/50 rounded-t-2xl text-center">
-                    <span className="text-sm font-bold text-foreground">{dayLabels[di] ?? d.title}</span>
-                    {d.startDate && (
-                      <span className="block text-[11px] font-medium text-muted-foreground mt-0.5">
-                        {new Date(d.startDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
-                      </span>
-                    )}
+                  <div className="p-3 border-b border-border/50 bg-white/50 rounded-t-2xl">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-foreground">{dayLabels[di] ?? d.title}</span>
+                      {d.startDate && (
+                        <span className="text-[10px] font-medium text-muted-foreground">
+                          {new Date(d.startDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 text-[10px]">
+                      <span className="text-emerald-600 font-semibold">+{formatVND(d.revenue)}</span>
+                      <span className="text-red-500 font-semibold">−{formatVND(d.expense)}</span>
+                      <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-bold ml-auto">{(d.children ?? []).length}</span>
+                    </div>
                   </div>
 
                   {/* Task Cards */}
