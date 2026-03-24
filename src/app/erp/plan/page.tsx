@@ -1232,12 +1232,25 @@ export default function PlanWizardPage() {
             className="flex-1 bg-white"
             onKeyDown={(e) => { if (e.key === "Enter" && feedback.trim()) handleAnalyze() }}
           />
-          <Button 
+          <Button
             onClick={handleAnalyze}
-            disabled={!feedback.trim()}
+            disabled={!feedback.trim() || regeneratingSection !== null}
             className="shrink-0 bg-zinc-900 text-white hover:bg-zinc-800"
           >
-            Tạo lại với AI
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            Generate lại toàn bộ
+          </Button>
+          <Button
+            onClick={() => {
+              if (!feedback.trim()) return
+              handleRegenerateSection(activeTab)
+            }}
+            disabled={!feedback.trim() || regeneratingSection !== null}
+            variant="outline"
+            className="shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${regeneratingSection ? "animate-spin" : ""}`} />
+            Chỉ cập nhật tab {activeTab === "cfo" ? "Tài chính" : activeTab === "ceo" ? "Chiến lược" : "Nhân sự"}
           </Button>
         </div>
       </div>
