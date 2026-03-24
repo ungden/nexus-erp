@@ -9,7 +9,7 @@ import { CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan, Roadma
 import { generateBoardAnalysis as fallbackBoard, generateRoadmapTree as fallbackTree } from './ai-engine';
 import { formatVND } from './format';
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'gemini-3-flash-preview';
 
 function getGenAI(): GoogleGenAI | null {
   const key = process.env.GEMINI_API_KEY;
