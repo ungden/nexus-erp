@@ -73,6 +73,8 @@ export interface HRPlan {
   hiringPlan: HiringPlanItem[];
   compensationPolicy: string;
   kpiBonusPolicy: string;
+  budgetUtilization?: number;   // % ngân sách HR đã sử dụng
+  idealHeadcount?: number;      // Headcount lý tưởng trước khi bị constrain bởi budget
 }
 
 export interface BoardAnalysis {

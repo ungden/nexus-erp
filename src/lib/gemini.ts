@@ -245,6 +245,32 @@ export async function generateBoardWithGemini(profile: CompanyProfile): Promise<
     hr.monthlyFixedCost = totalMonthlySalary + hr.monthlyOpex;
     hr.yearlyFixedCost = hr.monthlyFixedCost * 12;
 
+    // Enforce HR budget constraint — scale headcount down if over budget
+    const annualHRBudget = cfo.budgetAllocation.hr.amount;
+    if (annualHRBudget > 0 && hr.yearlyFixedCost > annualHRBudget) {
+      const scaleFactor = annualHRBudget / hr.yearlyFixedCost;
+      totalHeadcount = 0;
+      totalMonthlySalary = 0;
+      hr.departments = hr.departments.map(d => {
+        const newHC = Math.max(1, Math.round(d.headcount * scaleFactor));
+        const ts = newHC * d.avgSalary;
+        totalHeadcount += newHC;
+        totalMonthlySalary += ts;
+        return {
+          ...d,
+          headcount: newHC,
+          totalSalary: ts,
+          description: `${newHC} người · Lương TB ${formatVND(d.avgSalary)}/tháng`,
+        };
+      });
+      hr.totalHeadcount = totalHeadcount;
+      hr.monthlySalary = totalMonthlySalary;
+      hr.monthlyFixedCost = totalMonthlySalary + hr.monthlyOpex;
+      hr.yearlyFixedCost = hr.monthlyFixedCost * 12;
+    }
+
+    hr.budgetUtilization = annualHRBudget > 0 ? Math.round(hr.yearlyFixedCost / annualHRBudget * 100) : 0;
+
     const board: BoardAnalysis = { cfo, ceo, hr };
     const tree = fallbackTree(profile, board); // Tree structure from template, data from Gemini
 

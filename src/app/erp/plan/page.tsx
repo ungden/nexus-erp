@@ -340,6 +340,19 @@ export default function PlanWizardPage() {
     return { revenue: revenueNum, expense }
   }, [board, revenueNum])
 
+  // ---- HR budget cross-validation ----
+  const hrBudgetWarning = useMemo(() => {
+    if (!board) return null
+    const hrBudgetAnnual = board.cfo.budgetAllocation.hr.amount
+    const hrActualAnnual = board.hr.yearlyFixedCost
+    if (hrActualAnnual > hrBudgetAnnual) {
+      const overBy = hrActualAnnual - hrBudgetAnnual
+      const overPct = Math.round((overBy / hrBudgetAnnual) * 100)
+      return { overBy, overPct }
+    }
+    return null
+  }, [board])
+
   // ==========================================================
   // SCREEN 1: Input
   // ==========================================================
@@ -874,6 +887,27 @@ export default function PlanWizardPage() {
                   </Card>
                 ))}
               </div>
+
+              {/* Budget warning */}
+              {hrBudgetWarning && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-50 p-4 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-800">
+                    <p className="font-bold">Chi phí nhân sự vượt ngân sách CFO {hrBudgetWarning.overPct}%</p>
+                    <p className="mt-1">Vượt {formatVND(hrBudgetWarning.overBy)}/năm. Hãy giảm headcount hoặc tăng % ngân sách HR trong tab CFO.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Budget utilization info */}
+              {hr.budgetUtilization != null && (
+                <div className="text-[10px] text-muted-foreground flex items-center gap-2">
+                  <span>Sử dụng {hr.budgetUtilization}% ngân sách HR ({formatVND(board.cfo.budgetAllocation.hr.amount)}/năm)</span>
+                  {hr.idealHeadcount != null && hr.idealHeadcount > hr.totalHeadcount && (
+                    <span className="text-amber-600">· Headcount lý tưởng: {hr.idealHeadcount} người (giới hạn bởi ngân sách)</span>
+                  )}
+                </div>
+              )}
 
               {/* Department cards */}
               <div className="space-y-2">

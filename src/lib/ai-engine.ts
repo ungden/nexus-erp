@@ -185,11 +185,18 @@ export function generateCEOStrategy(profile: CompanyProfile, cfo: CFOAnalysis): 
 
 export function generateHRPlan(profile: CompanyProfile, cfo: CFOAnalysis, ceo: CEOStrategy): HRPlan {
   const kb = getKB(profile.industry);
-  const hrBudget = cfo.budgetAllocation.hr.amount;
-  
-  // Tính headcount từ HR budget
-  const totalHeadcount = Math.max(3, Math.round(profile.revenue / kb.revenuePerHead));
-  
+  const annualHRBudget = cfo.budgetAllocation.hr.amount;
+  const monthlyHRBudget = annualHRBudget / 12;
+
+  // Headcount lý tưởng từ revenue (để tham khảo)
+  const idealHeadcount = Math.max(3, Math.round(profile.revenue / kb.revenuePerHead));
+
+  // Tính headcount thực tế từ HR budget
+  const weightedAvgSalary = kb.departments.reduce((s, d) => s + (d.pct / 100) * d.avgSalary, 0);
+  const costPerHead = weightedAvgSalary + kb.opexPerHead;
+  const budgetHeadcount = Math.floor(monthlyHRBudget / costPerHead);
+  const totalHeadcount = Math.max(3, budgetHeadcount);
+
   const departments: DepartmentPlan[] = kb.departments.map(dept => {
     const headcount = Math.max(1, Math.round(totalHeadcount * dept.pct / 100));
     const totalSalary = headcount * dept.avgSalary;
@@ -204,8 +211,23 @@ export function generateHRPlan(profile: CompanyProfile, cfo: CFOAnalysis, ceo: C
     };
   });
 
-  const monthlySalary = departments.reduce((s, d) => s + d.totalSalary, 0);
+  let monthlySalary = departments.reduce((s, d) => s + d.totalSalary, 0);
   const monthlyOpex = totalHeadcount * kb.opexPerHead;
+
+  // Nếu vẫn vượt budget do rounding, scale salary xuống
+  if (monthlySalary + monthlyOpex > monthlyHRBudget) {
+    const salaryBudget = monthlyHRBudget - monthlyOpex;
+    if (salaryBudget > 0 && monthlySalary > 0) {
+      const scaleFactor = salaryBudget / monthlySalary;
+      departments.forEach(d => {
+        d.avgSalary = Math.round(d.avgSalary * scaleFactor);
+        d.totalSalary = d.headcount * d.avgSalary;
+        d.description = `${d.headcount} người · Lương TB ${formatVND(d.avgSalary)}/tháng`;
+      });
+      monthlySalary = departments.reduce((s, d) => s + d.totalSalary, 0);
+    }
+  }
+
   const monthlyFixed = monthlySalary + monthlyOpex;
   
   // Hiring plan per quarter (front-loaded)
@@ -215,6 +237,8 @@ export function generateHRPlan(profile: CompanyProfile, cfo: CFOAnalysis, ceo: C
     departments: departments.slice(0, 3).map(d => d.name),
     priority: i === 0 ? 'Ưu tiên cao — xây dựng đội ngũ nòng cốt' : i === 1 ? 'Trung bình — bổ sung nhân lực scale' : 'Thấp — tuyển bù/thay thế',
   }));
+
+  const budgetUtilization = annualHRBudget > 0 ? Math.round((monthlyFixed * 12) / annualHRBudget * 100) : 0;
 
   return {
     totalHeadcount,
@@ -226,7 +250,9 @@ export function generateHRPlan(profile: CompanyProfile, cfo: CFOAnalysis, ceo: C
     profitMargin: cfo.budgetAllocation.profit.percent,
     hiringPlan,
     compensationPolicy: `Lương cơ bản theo thị trường ngành ${profile.industry}. Review lương 2 lần/năm (Q2 & Q4). Lương tháng 13 cho nhân viên > 6 tháng.`,
-    kpiBonusPolicy: `Đạt KPI = +10% lương cơ bản. Vượt KPI = +15-20% tuỳ mức vượt. Thưởng team nếu phòng ban đạt target quý. Ngân sách thưởng: ${formatVND(Math.round(hrBudget * 0.1))}/năm.`,
+    kpiBonusPolicy: `Đạt KPI = +10% lương cơ bản. Vượt KPI = +15-20% tuỳ mức vượt. Thưởng team nếu phòng ban đạt target quý. Ngân sách thưởng: ${formatVND(Math.round(annualHRBudget * 0.1))}/năm.`,
+    budgetUtilization,
+    idealHeadcount,
   };
 }
 
@@ -250,8 +276,9 @@ export function generateRoadmapTree(profile: CompanyProfile, board: BoardAnalysi
   const rev = profile.revenue;
   const totalExpense = rev - cfo.budgetAllocation.profit.amount;
 
+  const expenseRatio = (100 - cfo.budgetAllocation.profit.percent) / 100;
   const quarters: RoadmapNode[] = ceo.quarterlyGoals.map((q) => {
-    const qExpense = Math.round(hr.monthlyFixedCost * 3 + (q.revenue * cfo.budgetAllocation.cogs.percent / 100));
+    const qExpense = Math.round(q.revenue * expenseRatio);
     const cf = q.revenue - qExpense;
     return {
       id: rid(), level: 'quarter' as const,
@@ -288,9 +315,10 @@ export function expandQuarter(node: RoadmapNode, profile: CompanyProfile, board:
   const monthNames = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
   const weights = [0.30, 0.33, 0.37];
 
+  const expenseRatio = (100 - board.cfo.budgetAllocation.profit.percent) / 100;
   return weights.map((w, i) => {
     const mRev = Math.round(node.revenue * w);
-    const mExp = Math.round(board.hr.monthlyFixedCost + (mRev * board.cfo.budgetAllocation.cogs.percent / 100));
+    const mExp = Math.round(mRev * expenseRatio);
     return {
       id: rid(), level: 'month' as const,
       title: `${monthNames[baseMonth + i]}/${new Date().getFullYear()}`,
