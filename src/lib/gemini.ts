@@ -334,28 +334,17 @@ export async function generateBoardWithGemini(profile: CompanyProfile): Promise<
   const ai = getGenAI();
 
   if (!ai) {
-    const board = fallbackBoard(profile);
-    const tree = fallbackTree(profile, board);
-    return { board, tree };
+    throw new Error('GEMINI_API_KEY chưa được cấu hình. Vào Vercel → Settings → Environment Variables để thêm.');
   }
 
-  try {
-    const cfo = await geminiCFO(profile);
-    const ceo = await geminiCEO(profile, cfo);
-    const hr = await geminiHR(profile, cfo, ceo);
-    enforceConstraints(cfo, hr);
+  const cfo = await geminiCFO(profile);
+  const ceo = await geminiCEO(profile, cfo);
+  const hr = await geminiHR(profile, cfo, ceo);
+  enforceConstraints(cfo, hr);
 
-    const board: BoardAnalysis = { cfo, ceo, hr };
-    const tree = fallbackTree(profile, board);
-    return { board, tree };
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
-    const errStack = error instanceof Error ? error.stack : '';
-    console.error('Gemini API error, falling back to placeholder:', errMsg, errStack);
-    const board = fallbackBoard(profile);
-    const tree = fallbackTree(profile, board);
-    return { board, tree };
-  }
+  const board: BoardAnalysis = { cfo, ceo, hr };
+  const tree = fallbackTree(profile, board);
+  return { board, tree };
 }
 
 // ============================================================
@@ -369,15 +358,7 @@ export async function generateBoardStreaming(
   const ai = getGenAI();
 
   if (!ai) {
-    onEvent({ type: 'phase', phase: 'cfo', label: 'Đang phân tích tài chính...' });
-    const board = fallbackBoard(profile);
-    onEvent({ type: 'phase', phase: 'tree', label: 'Đang xây dựng roadmap...' });
-    const tree = fallbackTree(profile, board);
-    onEvent({
-      type: 'result',
-      data: { board, tree, generatedAt: new Date().toISOString() },
-    });
-    onEvent({ type: 'phase', phase: 'done', label: 'Hoàn tất!' });
+    onEvent({ type: 'error', message: 'GEMINI_API_KEY chưa được cấu hình. Vào Vercel → Settings → Environment Variables để thêm.' });
     return;
   }
 
@@ -415,15 +396,7 @@ export async function generateBoardStreaming(
     onEvent({ type: 'phase', phase: 'done', label: 'Hoàn tất phân tích!' });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    const errStack = error instanceof Error ? error.stack : '';
-    console.error('Gemini streaming error:', errMsg, errStack);
-    onEvent({ type: 'phase', phase: 'cfo', label: 'Đang tạo kế hoạch...' });
-    const board = fallbackBoard(profile);
-    const tree = fallbackTree(profile, board);
-    onEvent({
-      type: 'result',
-      data: { board, tree, generatedAt: new Date().toISOString() },
-    });
-    onEvent({ type: 'phase', phase: 'done', label: 'Hoàn tất!' });
+    console.error('Gemini streaming error:', errMsg);
+    onEvent({ type: 'error', message: `Gemini API lỗi: ${errMsg}` });
   }
 }

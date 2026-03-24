@@ -116,6 +116,7 @@ export default function PlanWizardPage() {
   // ---------- Loading & thinking ----------
   const [loadStep, setLoadStep] = useState(0)
   const [thinkingText, setThinkingText] = useState("")
+  const [apiError, setApiError] = useState("")
 
   // ---------- Result state ----------
   const [board, setBoard] = useState<BoardAnalysis | null>(null)
@@ -137,6 +138,7 @@ export default function PlanWizardPage() {
     setScreen("loading")
     setLoadStep(0)
     setThinkingText("")
+    setApiError("")
 
     const profile: CompanyProfile = {
       companyName,
@@ -188,6 +190,8 @@ export default function PlanWizardPage() {
               setThinkingText(event.text)
             } else if (event.type === "result") {
               resultData = event.data
+            } else if (event.type === "error") {
+              throw new Error(event.message)
             }
           } catch { /* skip malformed events */ }
         }
@@ -218,7 +222,9 @@ export default function PlanWizardPage() {
 
       setScreen("results")
     } catch (err) {
-      console.error("Roadmap generation failed:", err)
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error("Roadmap generation failed:", msg)
+      setApiError(msg)
       setScreen("input")
     }
   }
@@ -382,6 +388,19 @@ export default function PlanWizardPage() {
   if (screen === "input") {
     return (
       <div className="max-w-3xl mx-auto py-6 md:py-10 px-4">
+        {/* API Error banner */}
+        {apiError && (
+          <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 flex items-start gap-3">
+            <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-red-800">Lỗi khi tạo kế hoạch</p>
+              <p className="text-xs text-red-700 mt-1 break-all">{apiError}</p>
+            </div>
+            <button onClick={() => setApiError("")} className="text-red-400 hover:text-red-600 shrink-0">
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {/* Header */}
         <div className="text-center space-y-2 mb-8">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">

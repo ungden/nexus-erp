@@ -10,7 +10,9 @@ export async function POST(request: NextRequest) {
     const profile: CompanyProfile = await request.json();
     const { board, tree } = await generateBoardWithGemini(profile);
     return NextResponse.json({ board, tree, generatedAt: new Date().toISOString() });
-  } catch {
-    return NextResponse.json({ error: 'Failed to generate' }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Roadmap API error:', message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
