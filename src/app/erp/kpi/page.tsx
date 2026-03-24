@@ -1,25 +1,32 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Target, BarChart3, AlertTriangle, CheckCircle2, ChevronRight, X, Trash2 } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Target, BarChart3, AlertTriangle, CheckCircle2, ChevronRight, X, Trash2, TrendingUp } from 'lucide-react';
 import { useAppContext, KPI as AppKPI, KpiStatus } from '@/context/AppContext';
 import { formatVND, formatNumber } from '@/lib/format';
 
-const statusConfig: Record<KpiStatus, { label: string; color: string; bg: string; barColor: string; border: string }> = {
-  'on-track': { label: 'Đúng tiến độ', color: 'text-indigo-700', bg: 'bg-indigo-50', barColor: 'bg-indigo-500', border: 'border-indigo-200' },
-  'at-risk': { label: 'Có nguy cơ', color: 'text-amber-700', bg: 'bg-amber-50', barColor: 'bg-amber-500', border: 'border-amber-200' },
-  'behind': { label: 'Chậm trễ', color: 'text-red-700', bg: 'bg-red-50', barColor: 'bg-red-500', border: 'border-red-200' },
+const statusConfig: Record<KpiStatus, { label: string; color: string; bg: string; barColor: string; border: string; gradient: string }> = {
+  'on-track': { label: 'Đúng tiến độ', color: 'text-indigo-700', bg: 'bg-indigo-50', barColor: 'bg-indigo-500', border: 'border-indigo-200', gradient: 'from-indigo-500 to-indigo-400' },
+  'at-risk': { label: 'Có nguy cơ', color: 'text-amber-700', bg: 'bg-amber-50', barColor: 'bg-amber-500', border: 'border-amber-200', gradient: 'from-amber-500 to-amber-400' },
+  'behind': { label: 'Chậm trễ', color: 'text-red-700', bg: 'bg-red-50', barColor: 'bg-red-500', border: 'border-red-200', gradient: 'from-red-500 to-red-400' },
 };
 
 export default function KPI() {
   const { kpis, setKpis } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newKpi, setNewKpi] = useState<Partial<AppKPI>>({ status: 'on-track' });
+  const [animateProgress, setAnimateProgress] = useState(false);
+
+  // Trigger progress bar animation on mount
+  useEffect(() => {
+    const timer = setTimeout(() => setAnimateProgress(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleAddKpi = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newKpi.title || !newKpi.target || !newKpi.current) return;
-    
+
     const target = Number(newKpi.target);
     const current = Number(newKpi.current);
     const progress = Math.min(Math.round((current / target) * 100), 100);
@@ -33,7 +40,7 @@ export default function KPI() {
       status: newKpi.status as KpiStatus,
       department: newKpi.department || 'Chung',
     };
-    
+
     setKpis([...kpis, kpi]);
     setIsModalOpen(false);
     setNewKpi({ status: 'on-track' });
@@ -64,6 +71,17 @@ export default function KPI() {
 
   const departments = Object.keys(groupedKpis).sort();
 
+  // ── Department avg progress for comparison bars ─────────────
+  const deptAvgProgress = useMemo(() => {
+    return departments.map(dept => {
+      const deptKpis = groupedKpis[dept];
+      const avg = deptKpis.length > 0
+        ? Math.round(deptKpis.reduce((sum, k) => sum + k.progress, 0) / deptKpis.length)
+        : 0;
+      return { department: dept, avgProgress: avg, count: deptKpis.length };
+    }).sort((a, b) => b.avgProgress - a.avgProgress);
+  }, [departments, groupedKpis]);
+
   const scorecardItems = [
     { label: 'Tổng KPIs', value: totalCount, icon: BarChart3, iconColor: 'text-indigo-600', iconBg: 'bg-indigo-50', borderColor: 'border-l-indigo-500' },
     { label: 'Đạt mục tiêu', value: onTrackCount, icon: CheckCircle2, iconColor: 'text-emerald-600', iconBg: 'bg-emerald-50', borderColor: 'border-l-emerald-500' },
@@ -81,12 +99,43 @@ export default function KPI() {
             Theo dõi mục tiêu (OKR/KPI) của công ty, phòng ban và cá nhân.
           </p>
         </div>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-white hover:bg-primary/90 h-10 py-2 px-4"
         >
           <Target className="mr-2 h-4 w-4" /> Thiết lập Mục tiêu
         </button>
+      </div>
+
+      {/* ── Overview row: on-track / at-risk / behind color cards ── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-xl bg-emerald-500/10 border border-emerald-200 p-4 flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-emerald-500 text-white">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-emerald-700">Đúng tiến độ</p>
+            <p className="text-3xl font-bold text-emerald-800">{onTrackCount}</p>
+          </div>
+        </div>
+        <div className="rounded-xl bg-amber-500/10 border border-amber-200 p-4 flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-amber-500 text-white">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-amber-700">Có nguy cơ</p>
+            <p className="text-3xl font-bold text-amber-800">{atRiskCount}</p>
+          </div>
+        </div>
+        <div className="rounded-xl bg-red-500/10 border border-red-200 p-4 flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-red-500 text-white">
+            <Target className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-red-700">Chậm trễ</p>
+            <p className="text-3xl font-bold text-red-800">{behindCount}</p>
+          </div>
+        </div>
       </div>
 
       {/* ── Scorecard header (4 mini cards) ────────────────────── */}
@@ -106,6 +155,33 @@ export default function KPI() {
           </div>
         ))}
       </div>
+
+      {/* ── Department comparison bars ────────────────────────── */}
+      {deptAvgProgress.length > 0 && (
+        <div className="glass-card overflow-hidden">
+          <div className="p-4 md:p-5 border-b border-border bg-muted/20 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-bold text-foreground">So sánh tiến độ theo Phòng ban</h2>
+          </div>
+          <div className="p-4 md:p-5 space-y-3">
+            {deptAvgProgress.map((d) => (
+              <div key={d.department} className="flex items-center gap-3">
+                <span className="text-sm font-medium text-foreground w-28 truncate shrink-0">{d.department}</span>
+                <div className="flex-1 h-6 bg-muted/30 rounded-full overflow-hidden relative">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-700 ease-out"
+                    style={{ width: animateProgress ? `${d.avgProgress}%` : '0%' }}
+                  />
+                  <span className="absolute inset-0 flex items-center justify-end pr-2 text-xs font-bold text-foreground/80">
+                    {d.avgProgress}%
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground w-16 text-right shrink-0">{d.count} KPIs</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── KPIs grouped by department ─────────────────────────── */}
       {kpis.length === 0 ? (
@@ -129,8 +205,8 @@ export default function KPI() {
               {groupedKpis[dept].map((kpi) => {
                 const status = statusConfig[kpi.status];
                 return (
-                  <div 
-                    key={kpi.id} 
+                  <div
+                    key={kpi.id}
                     className={`p-4 md:p-5 hover:bg-muted/20 transition-colors group border-l-4 ${
                       kpi.status === 'on-track' ? 'border-l-indigo-500' :
                       kpi.status === 'at-risk' ? 'border-l-amber-500' : 'border-l-red-500'
@@ -162,12 +238,12 @@ export default function KPI() {
                       <span>Đạt được: <strong className="text-foreground">{formatVND(kpi.current, 'full')}</strong></span>
                       <span>Mục tiêu: <strong className="text-foreground">{formatVND(kpi.target, 'full')}</strong></span>
                     </div>
-                    
-                    {/* Progress bar — taller h-3 with percentage */}
+
+                    {/* Progress bar — gradient colors + animate on load */}
                     <div className="relative w-full h-3 bg-muted/40 rounded-full overflow-hidden">
-                      <div 
-                        className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${status.barColor}`}
-                        style={{ width: `${kpi.progress}%` }}
+                      <div
+                        className={`absolute top-0 left-0 h-full rounded-full bg-gradient-to-r ${status.gradient} transition-all duration-700 ease-out`}
+                        style={{ width: animateProgress ? `${kpi.progress}%` : '0%' }}
                       />
                       {/* Percentage label inside bar */}
                       <div className="absolute inset-0 flex items-center justify-end pr-2">
@@ -197,9 +273,9 @@ export default function KPI() {
             <form onSubmit={handleAddKpi} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground/90 mb-1">Tên mục tiêu (KPI/OKR)</label>
-                <input 
+                <input
                   required
-                  type="text" 
+                  type="text"
                   className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={newKpi.title || ''}
                   onChange={e => setNewKpi({...newKpi, title: e.target.value})}
@@ -209,9 +285,9 @@ export default function KPI() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1">Mục tiêu cần đạt</label>
-                  <input 
+                  <input
                     required
-                    type="text" 
+                    type="text"
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
                     value={newKpi.target ? formatNumber(Number(String(newKpi.target).replace(/\D/g, ''))) : ''}
                     onChange={e => setNewKpi({...newKpi, target: Number(e.target.value.replace(/\D/g, ''))})}
@@ -220,9 +296,9 @@ export default function KPI() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1">Hiện tại</label>
-                  <input 
+                  <input
                     required
-                    type="text" 
+                    type="text"
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
                     value={newKpi.current ? formatNumber(Number(String(newKpi.current).replace(/\D/g, ''))) : ''}
                     onChange={e => setNewKpi({...newKpi, current: Number(e.target.value.replace(/\D/g, ''))})}
@@ -233,7 +309,7 @@ export default function KPI() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1">Trạng thái</label>
-                  <select 
+                  <select
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
                     value={newKpi.status || 'on-track'}
                     onChange={e => setNewKpi({...newKpi, status: e.target.value as KpiStatus})}
@@ -245,8 +321,8 @@ export default function KPI() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground/90 mb-1">Phòng ban phụ trách</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
                     value={newKpi.department || ''}
                     onChange={e => setNewKpi({...newKpi, department: e.target.value})}
@@ -255,14 +331,14 @@ export default function KPI() {
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 text-sm font-medium text-foreground/90 bg-card border border-border rounded-md hover:bg-muted/30"
                 >
                   Hủy
                 </button>
-                <button 
+                <button
                   type="submit"
                   className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90"
                 >
