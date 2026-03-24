@@ -349,7 +349,9 @@ export async function generateBoardWithGemini(profile: CompanyProfile): Promise<
     const tree = fallbackTree(profile, board);
     return { board, tree };
   } catch (error) {
-    console.error('Gemini API error, falling back to placeholder:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : '';
+    console.error('Gemini API error, falling back to placeholder:', errMsg, errStack);
     const board = fallbackBoard(profile);
     const tree = fallbackTree(profile, board);
     return { board, tree };
@@ -412,7 +414,9 @@ export async function generateBoardStreaming(
     });
     onEvent({ type: 'phase', phase: 'done', label: 'Hoàn tất phân tích!' });
   } catch (error) {
-    console.error('Gemini streaming error, falling back:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : '';
+    console.error('Gemini streaming error:', errMsg, errStack);
     onEvent({ type: 'phase', phase: 'cfo', label: 'Đang tạo kế hoạch...' });
     const board = fallbackBoard(profile);
     const tree = fallbackTree(profile, board);
