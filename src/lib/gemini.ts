@@ -71,7 +71,7 @@ async function callGeminiWithThinking(
 // CFO Analysis — Phân tích tài chính chuyên sâu
 // ============================================================
 
-async function geminiCFO(
+export async function geminiCFO(
   profile: CompanyProfile,
   onThought?: (text: string) => void,
 ): Promise<CFOAnalysis> {
@@ -131,7 +131,7 @@ Hãy phân tích thật kỹ trước khi đưa ra phương án tài chính.${pr
 // CEO Strategy — Chiến lược kinh doanh theo quý
 // ============================================================
 
-async function geminiCEO(
+export async function geminiCEO(
   profile: CompanyProfile,
   cfo: CFOAnalysis,
   onThought?: (text: string) => void,
@@ -196,7 +196,7 @@ Xây dựng chiến lược kinh doanh chi tiết theo quý.${profile.feedback ?
 // HR Director — Thiết kế bộ máy nhân sự
 // ============================================================
 
-async function geminiHR(
+export async function geminiHR(
   profile: CompanyProfile,
   cfo: CFOAnalysis,
   ceo: CEOStrategy,
@@ -269,10 +269,24 @@ Hãy thiết kế bộ máy nhân sự phù hợp với chiến lược và TRON
 }
 
 // ============================================================
+// Post-processing: generate structuredKpis from CEO companyKPIs
+// ============================================================
+
+export function generateStructuredKpis(ceo: CEOStrategy): void {
+  if (ceo.companyKPIs && Array.isArray(ceo.companyKPIs)) {
+    ceo.structuredKpis = ceo.companyKPIs.map((title, idx) => ({
+      id: idx + 1,
+      title,
+      target: Math.floor(Math.random() * 50) + 10,
+    }));
+  }
+}
+
+// ============================================================
 // Post-processing: enforce math + budget constraints
 // ============================================================
 
-function enforceConstraints(cfo: CFOAnalysis, hr: HRPlan): void {
+export function enforceConstraints(cfo: CFOAnalysis, hr: HRPlan): void {
   let totalMonthlySalary = 0;
   let totalHeadcount = 0;
 
@@ -339,6 +353,7 @@ export async function generateBoardWithGemini(profile: CompanyProfile): Promise<
 
   const cfo = await geminiCFO(profile);
   const ceo = await geminiCEO(profile, cfo);
+  generateStructuredKpis(ceo);
   const hr = await geminiHR(profile, cfo, ceo);
   enforceConstraints(cfo, hr);
 
@@ -374,6 +389,9 @@ export async function generateBoardStreaming(
     const ceo = await geminiCEO(profile, cfo, (text) => {
       onEvent({ type: 'thinking', phase: 'ceo', text });
     });
+
+    // Post-process CEO: generate structuredKpis
+    generateStructuredKpis(ceo);
 
     // Phase 3: HR
     onEvent({ type: 'phase', phase: 'hr', label: 'HR Director đang thiết kế bộ máy...' });

@@ -10,7 +10,7 @@ import {
   Building2, Target, ArrowRight, ArrowLeft, Sparkles, Check,
   Package, Users, Wallet, TrendingUp, DollarSign,
   AlertTriangle, CheckCircle2, XCircle, Edit3,
-  BarChart3, Briefcase, UserPlus, BadgePercent, Eye,
+  BarChart3, Briefcase, UserPlus, BadgePercent, Eye, RefreshCw,
 } from "lucide-react"
 import { useAppContext, Employee } from "@/context/AppContext"
 import { generateRoadmapTree, batchExpandQuarters, batchExpandMonths } from '@/lib/ai-engine'
@@ -19,7 +19,6 @@ import {
   RoadmapNode, Roadmap,
 } from "@/lib/roadmap-types"
 import { useAuth } from "@/context/AuthContext"
-import { supabase } from "@/lib/supabase"
 import { formatVND, formatNumber } from "@/lib/format"
 
 // ============================================================
@@ -122,6 +121,9 @@ export default function PlanWizardPage() {
   const [board, setBoard] = useState<BoardAnalysis | null>(null)
   const [tree, setTree] = useState<RoadmapNode | null>(null)
   const [generatedAt, setGeneratedAt] = useState("")
+
+  // ---------- Partial regeneration ----------
+  const [regeneratingSection, setRegeneratingSection] = useState<ResultTab | null>(null)
 
   // ---- Derived: input valid ----
   const isInputValid = companyName.trim() !== "" && industry !== "" &&
@@ -230,6 +232,88 @@ export default function PlanWizardPage() {
   }
 
   // ============================================================
+  // Partial Regeneration — regenerate a single section
+  // ============================================================
+
+  const handleRegenerateSection = async (section: ResultTab) => {
+    if (!board || regeneratingSection) return
+    setRegeneratingSection(section)
+    setThinkingText("")
+
+    const profile: CompanyProfile = {
+      companyName,
+      industry,
+      objective,
+      revenue: revenueNum,
+      headcount: board.hr.totalHeadcount,
+      fixedCost: board.hr.monthlyFixedCost,
+      products,
+      feedback: feedback.trim() || undefined,
+    }
+
+    try {
+      const res = await fetch("/api/roadmap/partial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile,
+          regenerateSection: section,
+          existingBoard: {
+            cfo: board.cfo,
+            ceo: board.ceo,
+            hr: board.hr,
+          },
+        }),
+      })
+
+      if (!res.ok) throw new Error("API failed")
+
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error("No reader")
+
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let resultData: { board: BoardAnalysis; tree: RoadmapNode; generatedAt: string } | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n\n")
+        buffer = lines.pop() || ""
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue
+          try {
+            const event = JSON.parse(line.slice(6))
+            if (event.type === "thinking") {
+              setThinkingText(event.text)
+            } else if (event.type === "result") {
+              resultData = event.data
+            } else if (event.type === "error") {
+              throw new Error(event.message)
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+
+      if (resultData?.board) {
+        setBoard(resultData.board)
+        setTree(resultData.tree)
+        setGeneratedAt(resultData.generatedAt)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error("Partial regeneration failed:", msg)
+      setApiError(msg)
+    } finally {
+      setRegeneratingSection(null)
+      setThinkingText("")
+    }
+  }
+
+  // ============================================================
   // Board edit helpers
   // ============================================================
 
@@ -245,13 +329,24 @@ export default function PlanWizardPage() {
     setBoard(prev => prev ? { ...prev, hr: updater(prev.hr) } : prev)
   }, [])
 
-  // ---- CFO: change budget % and recalculate amounts ----
+  // ---- CFO: change budget % and recalculate amounts, burnRate, breakEven ----
   const handleBudgetChange = useCallback((key: string, newPercent: number) => {
     updateCFO(cfo => {
       const alloc = { ...cfo.budgetAllocation }
       const k = key as keyof typeof alloc
       alloc[k] = { ...alloc[k], percent: newPercent, amount: Math.round(revenueNum * newPercent / 100) }
-      return { ...cfo, budgetAllocation: alloc }
+
+      // Recalculate monthlyBurnRate = (total cost excl. profit) / 12
+      const totalCostAmount = alloc.cogs.amount + alloc.hr.amount + alloc.marketing.amount + alloc.operations.amount
+      const monthlyBurnRate = Math.round(totalCostAmount / 12)
+
+      // Recalculate breakEvenMonth based on burn rate vs monthly revenue potential
+      const monthlyRevenue = Math.round(revenueNum / 12)
+      const breakEvenMonth = monthlyBurnRate > 0 && monthlyRevenue > monthlyBurnRate
+        ? Math.ceil(totalCostAmount / (monthlyRevenue - monthlyBurnRate + monthlyRevenue))
+        : cfo.breakEvenMonth
+
+      return { ...cfo, budgetAllocation: alloc, monthlyBurnRate, breakEvenMonth }
     })
   }, [revenueNum, updateCFO])
 
@@ -332,18 +427,8 @@ export default function PlanWizardPage() {
     const newRoadmaps = [...roadmaps, newRoadmap];
     setRoadmaps(newRoadmaps);
 
-    // Save directly to Supabase to ensure data is not lost when navigating away
-    try {
-      await supabase.from('roadmaps').delete().eq('user_id', user.id);
-      const rows = newRoadmaps.map(rm => ({
-        user_id: user.id,
-        data: rm,
-        updated_at: new Date().toISOString()
-      }));
-      await supabase.from('roadmaps').insert(rows);
-    } catch (err) {
-      console.error('Lỗi khi lưu kịch bản:', err);
-    }
+    // AppContext's useEffect on [roadmaps] handles Supabase persistence automatically.
+    // No direct Supabase call needed here — avoids race condition with AppContext save.
 
     if (newRoadmap.isActive) {
       setFinance({
@@ -685,6 +770,24 @@ export default function PlanWizardPage() {
           {/* ============ CFO TAB ============ */}
           {activeTab === "cfo" && (
             <div className="space-y-5">
+              {/* Regenerate button */}
+              <div className="flex items-center justify-between">
+                <div />
+                <button
+                  onClick={() => handleRegenerateSection("cfo")}
+                  disabled={regeneratingSection !== null}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-all disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${regeneratingSection === "cfo" ? "animate-spin" : ""}`} />
+                  {regeneratingSection === "cfo" ? "Đang phân tích lại..." : "AI phân tích lại phần này"}
+                </button>
+              </div>
+              {/* Thinking text for partial regen */}
+              {regeneratingSection === "cfo" && thinkingText && (
+                <div className="rounded-lg bg-primary/5 border border-primary/10 p-3">
+                  <p className="text-xs text-muted-foreground italic line-clamp-3">{thinkingText}</p>
+                </div>
+              )}
               {/* Feasibility Badge */}
               <div className="flex items-center gap-3">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${
@@ -799,6 +902,23 @@ export default function PlanWizardPage() {
           {/* ============ CEO TAB ============ */}
           {activeTab === "ceo" && (
             <div className="space-y-5">
+              {/* Regenerate button */}
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-muted-foreground">Phân tích lại CEO cũng sẽ cập nhật HR</p>
+                <button
+                  onClick={() => handleRegenerateSection("ceo")}
+                  disabled={regeneratingSection !== null}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-all disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${regeneratingSection === "ceo" ? "animate-spin" : ""}`} />
+                  {regeneratingSection === "ceo" ? "Đang phân tích lại..." : "AI phân tích lại phần này"}
+                </button>
+              </div>
+              {regeneratingSection === "ceo" && thinkingText && (
+                <div className="rounded-lg bg-primary/5 border border-primary/10 p-3">
+                  <p className="text-xs text-muted-foreground italic line-clamp-3">{thinkingText}</p>
+                </div>
+              )}
               {/* Vision */}
               <Card className="glass-card">
                 <CardContent className="p-4 space-y-2">
@@ -922,6 +1042,23 @@ export default function PlanWizardPage() {
           {/* ============ HR TAB ============ */}
           {activeTab === "hr" && (
             <div className="space-y-5">
+              {/* Regenerate button */}
+              <div className="flex items-center justify-between">
+                <div />
+                <button
+                  onClick={() => handleRegenerateSection("hr")}
+                  disabled={regeneratingSection !== null}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-all disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${regeneratingSection === "hr" ? "animate-spin" : ""}`} />
+                  {regeneratingSection === "hr" ? "Đang phân tích lại..." : "AI phân tích lại phần này"}
+                </button>
+              </div>
+              {regeneratingSection === "hr" && thinkingText && (
+                <div className="rounded-lg bg-primary/5 border border-primary/10 p-3">
+                  <p className="text-xs text-muted-foreground italic line-clamp-3">{thinkingText}</p>
+                </div>
+              )}
               {/* Summary cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
