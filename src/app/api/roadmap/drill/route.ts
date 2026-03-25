@@ -6,7 +6,6 @@ import {
 import {
   CompanyProfile, BoardAnalysis, RoadmapNode,
 } from '@/lib/roadmap-types';
-import { expandQuarter, expandMonth, expandWeek } from '@/lib/ai-engine';
 
 export const maxDuration = 60;
 
@@ -59,25 +58,8 @@ export async function POST(request: NextRequest) {
           send({ type: 'drill-result', children });
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
-          console.error('Drill AI error, trying fallback:', errMsg);
-
-          try {
-            let fallbackChildren: RoadmapNode[];
-
-            if (targetLevel === 'month') {
-              fallbackChildren = expandQuarter(parentNode, profile, board);
-            } else if (targetLevel === 'week') {
-              fallbackChildren = expandMonth(parentNode);
-            } else {
-              fallbackChildren = expandWeek(parentNode, profile, board, employees);
-            }
-
-            send({ type: 'drill-result', children: fallbackChildren });
-          } catch (fallbackErr) {
-            const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-            console.error('Drill fallback also failed:', fallbackMsg);
-            send({ type: 'drill-error', message: `Lỗi khi phân tích: ${errMsg}` });
-          }
+          console.error('Drill AI error:', errMsg);
+          send({ type: 'drill-error', message: `Lỗi khi phân tích: ${errMsg}` });
         } finally {
           controller.close();
         }

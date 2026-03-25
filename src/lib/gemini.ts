@@ -6,7 +6,6 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan, RoadmapNode, getCashflowStatus } from './roadmap-types';
-import { generateBoardAnalysis as fallbackBoard, generateRoadmapTree as fallbackTree } from './ai-engine';
 import { formatVND } from './format';
 
 const MODEL_NAME = 'gemini-3-flash-preview';
@@ -75,6 +74,90 @@ async function callGeminiWithThinking(
 }
 
 // ============================================================
+// Retry wrapper — retry once on failure
+// ============================================================
+
+async function callGeminiWithRetry(
+  systemPrompt: string,
+  userPrompt: string,
+  onThought?: (text: string) => void,
+  maxTokens?: number,
+): Promise<string> {
+  try {
+    return await callGeminiWithThinking(systemPrompt, userPrompt, onThought, maxTokens);
+  } catch (err) {
+    // Retry once
+    console.warn('Gemini call failed, retrying...', err);
+    return await callGeminiWithThinking(systemPrompt, userPrompt, onThought, maxTokens);
+  }
+}
+
+// ============================================================
+// Safe JSON parser — handles markdown code blocks & extraction
+// ============================================================
+
+function safeParseJSON<T>(text: string): T {
+  // Try direct parse
+  try { return JSON.parse(text); } catch { /* continue */ }
+  // Try extracting JSON from markdown code blocks
+  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (match) {
+    try { return JSON.parse(match[1]); } catch { /* continue */ }
+  }
+  // Try finding array or object
+  const arrMatch = text.match(/\[[\s\S]*\]/);
+  if (arrMatch) {
+    try { return JSON.parse(arrMatch[0]); } catch { /* continue */ }
+  }
+  const objMatch = text.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    try { return JSON.parse(objMatch[0]); } catch { /* continue */ }
+  }
+  throw new Error('Không thể parse JSON từ Gemini response');
+}
+
+// ============================================================
+// Build tree stubs inline (Year + 4 Quarters)
+// ============================================================
+
+function buildTreeStubs(profile: CompanyProfile, board: BoardAnalysis): RoadmapNode {
+  const expenseRatio = (100 - board.cfo.budgetAllocation.profit.percent) / 100;
+  const totalExpense = Math.round(profile.revenue * expenseRatio);
+
+  const yearNode: RoadmapNode = {
+    id: rid(),
+    level: 'year',
+    title: `Kế hoạch ${profile.companyName} ${new Date().getFullYear()}`,
+    description: board.ceo.vision,
+    revenue: profile.revenue,
+    expense: totalExpense,
+    cashflow: profile.revenue - totalExpense,
+    cashflowStatus: getCashflowStatus(profile.revenue, totalExpense),
+    kpis: board.ceo.companyKPIs.slice(0, 3),
+    children: board.ceo.quarterlyGoals.map((q, i) => {
+      const qExp = Math.round(q.revenue * expenseRatio);
+      return {
+        id: rid(),
+        level: 'quarter' as const,
+        title: `Quý ${i + 1}`,
+        description: q.keyObjectives.join(' · '),
+        theme: q.theme,
+        milestones: q.milestones,
+        revenue: q.revenue,
+        expense: qExp,
+        cashflow: q.revenue - qExp,
+        cashflowStatus: getCashflowStatus(q.revenue, qExp),
+        kpis: board.ceo.companyKPIs.slice(0, 3),
+        children: undefined,
+        isExpanded: false,
+      };
+    }),
+    isExpanded: true,
+  };
+  return yearNode;
+}
+
+// ============================================================
 // CFO Analysis — Phân tích tài chính chuyên sâu
 // ============================================================
 
@@ -130,8 +213,8 @@ Sản phẩm/Dịch vụ: ${profile.products}
 
 Hãy phân tích thật kỹ trước khi đưa ra phương án tài chính.${profile.feedback ? `\n\nYÊU CẦU BỔ SUNG TỪ CEO:\n${profile.feedback}` : ''}`;
 
-  const text = await callGeminiWithThinking(systemPrompt, userPrompt, onThought, 4096);
-  return JSON.parse(text);
+  const text = await callGeminiWithRetry(systemPrompt, userPrompt, onThought, 4096);
+  return safeParseJSON<CFOAnalysis>(text);
 }
 
 // ============================================================
@@ -195,8 +278,8 @@ Phân tích: ${cfo.analysis}
 
 Xây dựng chiến lược kinh doanh chi tiết theo quý.${profile.feedback ? `\n\nYÊU CẦU CEO:\n${profile.feedback}` : ''}`;
 
-  const text = await callGeminiWithThinking(systemPrompt, userPrompt, onThought, 8192);
-  return JSON.parse(text);
+  const text = await callGeminiWithRetry(systemPrompt, userPrompt, onThought, 8192);
+  return safeParseJSON<CEOStrategy>(text);
 }
 
 // ============================================================
@@ -271,8 +354,8 @@ ${ceo.quarterlyGoals.map(q => `Q${q.quarter} (${formatVND(q.revenue)}): ${q.them
 
 Hãy thiết kế bộ máy nhân sự phù hợp với chiến lược và TRONG giới hạn ngân sách.${profile.feedback ? `\n\nYÊU CẦU BỔ SUNG:\n${profile.feedback}` : ''}`;
 
-  const text = await callGeminiWithThinking(systemPrompt, userPrompt, onThought, 8192);
-  return JSON.parse(text);
+  const text = await callGeminiWithRetry(systemPrompt, userPrompt, onThought, 8192);
+  return safeParseJSON<HRPlan>(text);
 }
 
 // ============================================================
@@ -365,7 +448,7 @@ export async function generateBoardWithGemini(profile: CompanyProfile): Promise<
   enforceConstraints(cfo, hr);
 
   const board: BoardAnalysis = { cfo, ceo, hr };
-  const tree = fallbackTree(profile, board);
+  const tree = buildTreeStubs(profile, board);
   return { board, tree };
 }
 
@@ -412,7 +495,7 @@ export async function generateBoardStreaming(
     // Build tree
     onEvent({ type: 'phase', phase: 'tree', label: 'Đang xây dựng roadmap chi tiết...' });
     const board: BoardAnalysis = { cfo, ceo, hr };
-    const tree = fallbackTree(profile, board);
+    const tree = buildTreeStubs(profile, board);
 
     onEvent({
       type: 'result',
@@ -450,6 +533,12 @@ NGUYÊN TẮC:
 - Chi phí mỗi tháng = doanh thu tháng × ${expenseRatio} (tỷ lệ chi phí = (100 - ${profitPercent}%) / 100)
 - Mỗi tháng phải có chủ đề/trọng tâm KHÁC NHAU
 - KPIs phải CỤ THỂ và ĐO LƯỜNG ĐƯỢC (có con số)
+
+YÊU CẦU CHI TIẾT:
+- Mỗi tháng phải có mục tiêu doanh thu CỤ THỂ và CÁCH ĐẠT ĐƯỢC (chiến thuật, kênh bán hàng)
+- KPIs phải SMART: Specific, Measurable, Achievable, Relevant, Time-bound
+- Phải liên kết trực tiếp với milestones của quý
+- Mô tả chi tiết 3-5 câu cho mỗi tháng, không generic
 
 JSON format (CHỈ JSON, không markdown):
 [
@@ -498,8 +587,8 @@ ${board.ceo.companyKPIs.join('\n')}
 
 Hãy tạo kế hoạch 3 tháng chi tiết cho quý này.`;
 
-  const text = await callGeminiWithThinking(systemPrompt, userPrompt, onThought, 4096);
-  const months: { title: string; description: string; theme: string; department: string; revenue: number; expense: number; kpis: string[] }[] = JSON.parse(text);
+  const text = await callGeminiWithRetry(systemPrompt, userPrompt, onThought, 4096);
+  const months: { title: string; description: string; theme: string; department: string; revenue: number; expense: number; kpis: string[] }[] = safeParseJSON(text);
 
   return months.map((m) => ({
     id: rid(),
@@ -537,6 +626,11 @@ NGUYÊN TẮC:
 - Mỗi tuần có trọng tâm hoạt động khác nhau
 - KPIs phải CỤ THỂ và ĐO LƯỜNG ĐƯỢC
 
+YÊU CẦU CHI TIẾT:
+- Tuần 1: Setup & chuẩn bị. Tuần 2-3: Triển khai chính. Tuần 4: Đánh giá & báo cáo
+- Mỗi tuần phải có focus area rõ ràng, không trùng lặp
+- KPIs tuần phải đo lường được trong 7 ngày
+
 JSON format (CHỈ JSON, không markdown):
 [
   {
@@ -573,8 +667,8 @@ PHÒNG BAN: ${deptList}
 
 Hãy tạo kế hoạch 4 tuần chi tiết.`;
 
-  const text = await callGeminiWithThinking(systemPrompt, userPrompt, onThought, 4096);
-  const weeks: { title: string; description: string; revenue: number; expense: number; kpis: string[] }[] = JSON.parse(text);
+  const text = await callGeminiWithRetry(systemPrompt, userPrompt, onThought, 4096);
+  const weeks: { title: string; description: string; revenue: number; expense: number; kpis: string[] }[] = safeParseJSON(text);
 
   // Determine month index from title for date calculations
   const monthMatch = monthNode.title.match(/(\d+)/);
@@ -632,10 +726,18 @@ NGUYÊN TẮC:
 - bonusPercent: từ 5% đến 20%
   + Nhân viên Sales/Marketing (tạo doanh thu): bonusPercent cao hơn (15-20%)
   + Nhân viên vận hành/hỗ trợ: bonusPercent thấp hơn (5-10%)
+  + Nhân viên chiến lược/quản lý: bonusPercent trung bình (10-15%)
 - Doanh thu 5 ngày PHẢI cộng lại ĐÚNG BẰNG doanh thu tuần (${weekNode.revenue})
 - Chi phí tuần ước tính: ${Math.round(weekExpense)}
 - Mỗi task phải có personalKPI CỤ THỂ và ĐO LƯỜNG ĐƯỢC
 - Mỗi ngày có 3-5 tasks
+
+YÊU CẦU CHI TIẾT:
+- Mỗi nhân viên được gán 2-4 tasks/tuần (KHÔNG quá tải, KHÔNG dưới 2)
+- Mỗi task phải CỤ THỂ, ACTIONABLE, đo lường kết quả trong 1 ngày
+- personalKPI phải liên quan TRỰC TIẾP đến task (không generic kiểu 'Hoàn thành đúng hạn')
+- bonusPercent: task tạo doanh thu = 15-20%, task vận hành = 5-10%, task chiến lược = 10-15%
+- Phải phân bổ ĐỀU tasks theo phòng ban, không dồn hết cho 1 người
 
 JSON format (CHỈ JSON, không markdown):
 [
@@ -681,7 +783,7 @@ ${structuredKpisText}
 
 Hãy phân công công việc chi tiết cho 5 ngày, gán đúng nhân viên theo năng lực và phòng ban.`;
 
-  const text = await callGeminiWithThinking(systemPrompt, userPrompt, onThought, 16384);
+  const text = await callGeminiWithRetry(systemPrompt, userPrompt, onThought, 16384);
   const days: {
     title: string;
     description: string;
@@ -696,7 +798,7 @@ Hãy phân công công việc chi tiết cho 5 ngày, gán đúng nhân viên th
       bonusPercent: number;
       department: string;
     }[];
-  }[] = JSON.parse(text);
+  }[] = safeParseJSON(text);
 
   // Build employee lookup
   const empMap = new Map(employees.map((e) => [e.id, e]));

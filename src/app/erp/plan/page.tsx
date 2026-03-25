@@ -13,10 +13,9 @@ import {
   BarChart3, Briefcase, UserPlus, BadgePercent, Eye, RefreshCw,
 } from "lucide-react"
 import { useAppContext, Employee } from "@/context/AppContext"
-import { generateRoadmapTree } from '@/lib/ai-engine'
 import {
   CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan,
-  RoadmapNode, Roadmap,
+  RoadmapNode, RoadmapLevel, Roadmap, getCashflowStatus,
 } from "@/lib/roadmap-types"
 import { useAuth } from "@/context/AuthContext"
 import { formatVND, formatNumber } from "@/lib/format"
@@ -408,7 +407,41 @@ export default function PlanWizardPage() {
       setEmployees(mergedEmployees);
     }
 
-    const fullTree = generateRoadmapTree(profile, board);
+    // Build Year + 4 Quarter stubs inline (no template engine)
+    const expenseRatio = (100 - board.cfo.budgetAllocation.profit.percent) / 100;
+    const totalExpense = Math.round(revenueNum * expenseRatio);
+    const rid = () => Math.random().toString(36).substring(2, 10);
+
+    const fullTree: RoadmapNode = {
+      id: rid(),
+      level: 'year',
+      title: `Kế hoạch ${companyName} ${new Date().getFullYear()}`,
+      description: board.ceo.vision,
+      revenue: revenueNum,
+      expense: totalExpense,
+      cashflow: revenueNum - totalExpense,
+      cashflowStatus: getCashflowStatus(revenueNum, totalExpense),
+      kpis: board.ceo.companyKPIs.slice(0, 3),
+      children: board.ceo.quarterlyGoals.map((q, i) => {
+        const qExp = Math.round(q.revenue * expenseRatio);
+        return {
+          id: rid(),
+          level: 'quarter' as RoadmapLevel,
+          title: `Quý ${i + 1}`,
+          description: q.keyObjectives.join(' · '),
+          theme: q.theme,
+          milestones: q.milestones,
+          revenue: q.revenue,
+          expense: qExp,
+          cashflow: q.revenue - qExp,
+          cashflowStatus: getCashflowStatus(q.revenue, qExp),
+          kpis: board.ceo.companyKPIs.slice(0, 3),
+          children: undefined,
+          isExpanded: false,
+        };
+      }),
+      isExpanded: true,
+    };
 
     const newRoadmap: Roadmap = {
       id: `rm_${Date.now()}`,

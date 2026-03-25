@@ -6,9 +6,8 @@ import {
 } from '@/lib/gemini';
 import {
   CompanyProfile, CFOAnalysis, CEOStrategy, HRPlan,
-  BoardAnalysis, RoadmapNode,
+  BoardAnalysis, RoadmapNode, getCashflowStatus,
 } from '@/lib/roadmap-types';
-import { generateRoadmapTree } from '@/lib/ai-engine';
 
 export const maxDuration = 60;
 
@@ -91,10 +90,43 @@ export async function POST(request: NextRequest) {
             enforceConstraints(cfo, hr);
           }
 
-          // Build tree
+          // Build tree stubs inline (Year + 4 Quarters)
           send({ type: 'phase', phase: 'tree', label: 'Đang xây dựng roadmap chi tiết...' });
           const board: BoardAnalysis = { cfo, ceo, hr };
-          const tree: RoadmapNode = generateRoadmapTree(profile, board);
+          const rid = () => Math.random().toString(36).substring(2, 10);
+          const expenseRatio = (100 - board.cfo.budgetAllocation.profit.percent) / 100;
+          const totalExpense = Math.round(profile.revenue * expenseRatio);
+
+          const tree: RoadmapNode = {
+            id: rid(),
+            level: 'year',
+            title: `Kế hoạch ${profile.companyName} ${new Date().getFullYear()}`,
+            description: board.ceo.vision,
+            revenue: profile.revenue,
+            expense: totalExpense,
+            cashflow: profile.revenue - totalExpense,
+            cashflowStatus: getCashflowStatus(profile.revenue, totalExpense),
+            kpis: board.ceo.companyKPIs.slice(0, 3),
+            children: board.ceo.quarterlyGoals.map((q, i) => {
+              const qExp = Math.round(q.revenue * expenseRatio);
+              return {
+                id: rid(),
+                level: 'quarter' as const,
+                title: `Quý ${i + 1}`,
+                description: q.keyObjectives.join(' · '),
+                theme: q.theme,
+                milestones: q.milestones,
+                revenue: q.revenue,
+                expense: qExp,
+                cashflow: q.revenue - qExp,
+                cashflowStatus: getCashflowStatus(q.revenue, qExp),
+                kpis: board.ceo.companyKPIs.slice(0, 3),
+                children: undefined,
+                isExpanded: false,
+              };
+            }),
+            isExpanded: true,
+          };
 
           send({
             type: 'result',

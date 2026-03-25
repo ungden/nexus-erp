@@ -399,6 +399,48 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         const expandedTree = updateNodeInTree(roadmap.tree, parentNode.id, (n) => ({
           ...n, children: resultChildren, isExpanded: true, isLoading: false
         }));
+
+        // Auto-sync tasks to ERP if this was a week drill-down (day level = tasks generated)
+        if (targetLevel === 'day' && setTasks && tasks) {
+          const allNewTasks: Task[] = [];
+          for (const day of resultChildren) {
+            for (const task of (day.children ?? [])) {
+              if (task.level === 'task' && !task.syncedToTasks) {
+                allNewTasks.push({
+                  id: `t_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  title: task.title,
+                  assigneeId: task.assigneeId || 0,
+                  dueDate: task.startDate || new Date().toISOString().split('T')[0],
+                  priority: 'medium' as const,
+                  status: 'todo' as const,
+                  department: task.department || 'Chung',
+                  bonusAmount: task.bonusAmount || 0,
+                  roadmapNodeId: task.id,
+                  linkedKpiId: task.linkedKpiId,
+                  kpiContribution: task.kpiContribution,
+                });
+              }
+            }
+          }
+
+          if (allNewTasks.length > 0) {
+            setTasks([...tasks, ...allNewTasks]);
+
+            // Mark all tasks as synced in the tree
+            const updates: Record<string, Partial<RoadmapNode>> = {};
+            for (const day of resultChildren) {
+              for (const task of (day.children ?? [])) {
+                if (task.level === 'task') {
+                  updates[task.id] = { syncedToTasks: true };
+                }
+              }
+            }
+            const syncedTree = updateNodesInTree(expandedTree, updates);
+            onUpdate({ ...roadmap, tree: syncedTree });
+            return; // Don't call onUpdate twice
+          }
+        }
+
         onUpdate({ ...roadmap, tree: expandedTree });
       } else {
         throw new Error('No children generated');
