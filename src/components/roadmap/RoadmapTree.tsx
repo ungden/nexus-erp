@@ -10,7 +10,7 @@ import { useAppContext, Task, Employee } from "@/context/AppContext"
 import {
   ChevronRight, ChevronDown, Calendar, Target, Users,
   Send, Edit2, X, ArrowRight, Building2, UserCheck, AlertCircle,
-  BarChart3, Filter,
+  BarChart3, Filter, RefreshCw, Sparkles, Loader2,
 } from "lucide-react"
 
 /* ── Props ────────────────────────────────────────────── */
@@ -308,6 +308,7 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
   const [editingTask, setEditingTask] = useState<RoadmapNode | null>(null)
   const [weekViewMode, setWeekViewMode] = useState<"day" | "assignee">("day")
   const [monthGroupBy, setMonthGroupBy] = useState<"none" | "department" | "assignee">("none")
+  const [drillThinking, setDrillThinking] = useState("")
 
   /* Sync navStack when tree root ID changes (e.g. after generation or roadmap switch) */
   const treeRootId = tree.id
@@ -320,10 +321,115 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
   const activeId = navStack[navStack.length - 1]
   const currentNode = useMemo(() => findNode(tree, activeId) ?? tree, [tree, activeId])
 
+  /* ── Drill-down helpers ─────────────────────────────── */
+
+  function getTargetLevel(level: string): 'month' | 'week' | 'day' | null {
+    switch (level) {
+      case 'quarter': return 'month';
+      case 'month': return 'week';
+      case 'week': return 'day';
+      default: return null;
+    }
+  }
+
+  async function drillDown(parentNode: RoadmapNode, targetLevel: 'month' | 'week' | 'day') {
+    // 1. Set loading state on parent node
+    const loadingTree = updateNodeInTree(roadmap.tree, parentNode.id, (n) => ({
+      ...n, isLoading: true
+    }));
+    onUpdate({ ...roadmap, tree: loadingTree });
+    setDrillThinking("");
+
+    try {
+      // 2. Build request
+      const body: Record<string, unknown> = {
+        profile: roadmap.company,
+        board: roadmap.board,
+        parentNode,
+        targetLevel,
+      };
+
+      // Include employees for day-level expansion (task assignment)
+      if (targetLevel === 'day' && employees && employees.length > 0) {
+        body.employees = employees.map(e => ({
+          id: e.id, name: e.name, department: e.department,
+          role: e.role, baseSalary: e.baseSalary
+        }));
+      }
+
+      const res = await fetch('/api/roadmap/drill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error('API failed');
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No reader');
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let resultChildren: RoadmapNode[] | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === 'drill-thinking') {
+              setDrillThinking(event.text);
+            } else if (event.type === 'drill-result') {
+              resultChildren = event.children;
+            } else if (event.type === 'drill-error') {
+              throw new Error(event.message);
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+
+      if (resultChildren && resultChildren.length > 0) {
+        const expandedTree = updateNodeInTree(roadmap.tree, parentNode.id, (n) => ({
+          ...n, children: resultChildren, isExpanded: true, isLoading: false
+        }));
+        onUpdate({ ...roadmap, tree: expandedTree });
+      } else {
+        throw new Error('No children generated');
+      }
+    } catch (err) {
+      console.error('Drill-down failed:', err);
+      // Clear loading state
+      const clearedTree = updateNodeInTree(roadmap.tree, parentNode.id, (n) => ({
+        ...n, isLoading: false
+      }));
+      onUpdate({ ...roadmap, tree: clearedTree });
+    } finally {
+      setDrillThinking("");
+    }
+  }
+
   /* ── Navigation ─────────────────────────────────────── */
 
   function navigateTo(nodeId: string) {
-    setNavStack((prev) => [...prev, nodeId])
+    const targetNode = findNode(tree, nodeId);
+    if (!targetNode) return;
+
+    // If node has no children and is expandable, trigger AI drill-down
+    if (!targetNode.children && !targetNode.isLoading && targetNode.level !== 'task') {
+      const targetLevel = getTargetLevel(targetNode.level);
+      if (targetLevel) {
+        drillDown(targetNode, targetLevel);
+      }
+    }
+
+    setNavStack((prev) => [...prev, nodeId]);
   }
 
   function navigateToIndex(idx: number) {
@@ -470,6 +576,66 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
     setEditingTask(null)
   }
 
+  /* ── Drill Loading View ─────────────────────────────── */
+
+  function DrillLoadingView({ node }: { node: RoadmapNode }) {
+    const levelLabel = node.level === 'quarter' ? 'tháng' : node.level === 'month' ? 'tuần' : 'ngày & công việc';
+    return (
+      <div className="space-y-6">
+        <div className="glass-card p-8 md:p-12 flex flex-col items-center justify-center text-center space-y-6">
+          <div className="relative">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            </div>
+            <Sparkles className="w-5 h-5 text-amber-500 absolute -top-1 -right-1 animate-pulse" />
+          </div>
+          <div className="space-y-2 max-w-md">
+            <h3 className="text-lg font-bold text-foreground">
+              AI đang phân tích chi tiết {levelLabel}...
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Gemini đang suy nghĩ để tạo kế hoạch {levelLabel} chi tiết,
+              phù hợp với chiến lược và ngân sách của bạn.
+            </p>
+          </div>
+          {drillThinking && (
+            <div className="w-full max-w-lg rounded-xl bg-muted/30 border border-border p-4">
+              <p className="text-xs text-muted-foreground italic line-clamp-4 leading-relaxed">
+                💭 {drillThinking}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Regenerate Button ─────────────────────────────── */
+
+  function RegenerateButton({ node }: { node: RoadmapNode }) {
+    const targetLevel = getTargetLevel(node.level);
+    if (!targetLevel || !node.children) return null;
+
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          // Clear children and re-drill
+          const clearedTree = updateNodeInTree(roadmap.tree, node.id, (n) => ({
+            ...n, children: undefined, isExpanded: false
+          }));
+          onUpdate({ ...roadmap, tree: clearedTree });
+          drillDown(node, targetLevel);
+        }}
+        disabled={!!node.isLoading}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-all disabled:opacity-50"
+      >
+        <RefreshCw className={cn("w-3.5 h-3.5", node.isLoading && "animate-spin")} />
+        Tạo lại với AI
+      </button>
+    );
+  }
+
   /* ────────────────────────────────────────────────────── */
   /*  LEVEL VIEWS                                          */
   /* ────────────────────────────────────────────────────── */
@@ -601,6 +767,7 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
               <h2 className="text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">📅 {node.title}</h2>
               {node.theme && <p className="text-base font-bold text-indigo-700 mt-1">🎯 {node.theme}</p>}
             </div>
+            <RegenerateButton node={node} />
           </div>
 
           {/* Summary bar */}
@@ -689,8 +856,14 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
               </div>
             )
           })}
-          {months.length === 0 && (
-            <div className="col-span-3 text-center text-muted-foreground text-sm py-4">Chưa có dữ liệu tháng.</div>
+          {months.length === 0 && !node.isLoading && (
+            <div className="col-span-3 glass-card p-8 text-center space-y-4">
+              <Sparkles className="w-8 h-8 text-primary/40 mx-auto" />
+              <p className="text-sm text-muted-foreground">Chưa có dữ liệu tháng. Click để AI phân tích.</p>
+              <button onClick={() => drillDown(node, 'month')} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold">
+                <Sparkles className="w-4 h-4 inline mr-1" /> Generate với AI
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -813,9 +986,12 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
       <div className="space-y-6">
         {/* Dashboard header */}
         <div className="glass-card p-6 space-y-4">
-          <h2 className="text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
-            📆 {node.title}
-          </h2>
+          <div className="flex items-start justify-between flex-wrap gap-4">
+            <h2 className="text-xl md:text-2xl font-black tracking-tight flex items-center gap-2">
+              📆 {node.title}
+            </h2>
+            <RegenerateButton node={node} />
+          </div>
           <p className="text-sm text-muted-foreground">{node.description}</p>
           <SummaryBar stats={monthStats} />
           <CashflowBar revenue={node.revenue} expense={node.expense} cashflow={node.cashflow} status={node.cashflowStatus} />
@@ -905,8 +1081,14 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         {monthGroupBy === "none" && (
           <>
             {weeks.length === 0 ? (
-              <div className="glass-card p-8 text-center text-muted-foreground">
-                Chưa có dữ liệu tuần cho tháng này.
+              <div className="glass-card p-8 text-center space-y-4">
+                <Sparkles className="w-8 h-8 text-primary/40 mx-auto" />
+                <p className="text-sm text-muted-foreground">Chưa có dữ liệu tuần cho tháng này.</p>
+                {!node.isLoading && (
+                  <button onClick={() => drillDown(node, 'week')} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold">
+                    <Sparkles className="w-4 h-4 inline mr-1" /> Generate với AI
+                  </button>
+                )}
               </div>
             ) : (
               <div className="flex overflow-x-auto custom-scrollbar gap-4 pb-4 items-start">
@@ -1009,6 +1191,8 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
                 </p>
               )}
             </div>
+            <div className="flex items-center gap-2">
+              <RegenerateButton node={node} />
             {/* Prominent sync button */}
             <button
               onClick={() => handlePushToERP(node)}
@@ -1023,6 +1207,7 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
               <Send className="w-5 h-5" />
               Đồng bộ Thực thi ({unsynced.length})
             </button>
+            </div>
           </div>
 
           {/* Summary bar */}
@@ -1097,8 +1282,14 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
         {weekViewMode === "day" && (
           <>
             {days.length === 0 ? (
-              <div className="glass-card p-8 text-center text-sm text-muted-foreground">
-                Chưa có dữ liệu ngày cho tuần này.
+              <div className="glass-card p-8 text-center space-y-4">
+                <Sparkles className="w-8 h-8 text-primary/40 mx-auto" />
+                <p className="text-sm text-muted-foreground">Chưa có dữ liệu ngày cho tuần này.</p>
+                {!node.isLoading && (
+                  <button onClick={() => drillDown(node, 'day')} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold">
+                    <Sparkles className="w-4 h-4 inline mr-1" /> Generate với AI
+                  </button>
+                )}
               </div>
             ) : (
               <div className="flex overflow-x-auto custom-scrollbar gap-4 pb-4 items-start">
@@ -1148,6 +1339,16 @@ export function RoadmapTree({ roadmap, onUpdate }: Props) {
   /* ── Level Router ───────────────────────────────────── */
 
   function renderLevel(node: RoadmapNode) {
+    // Show loading view when AI is generating children
+    if (node.isLoading) {
+      return <DrillLoadingView node={node} />;
+    }
+
+    // Show loading view when navigated to a node with no children yet
+    if (!node.children && node.level !== 'year' && node.level !== 'task') {
+      return <DrillLoadingView node={node} />;
+    }
+
     switch (node.level) {
       case "year":
         return <YearView node={node} />

@@ -13,7 +13,7 @@ import {
   BarChart3, Briefcase, UserPlus, BadgePercent, Eye, RefreshCw,
 } from "lucide-react"
 import { useAppContext, Employee } from "@/context/AppContext"
-import { generateRoadmapTree, batchExpandQuarters, batchExpandMonths } from '@/lib/ai-engine'
+import { generateRoadmapTree } from '@/lib/ai-engine'
 import {
   CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan,
   RoadmapNode, Roadmap,
@@ -408,11 +408,7 @@ export default function PlanWizardPage() {
       setEmployees(mergedEmployees);
     }
 
-    let fullTree = generateRoadmapTree(profile, board);
-    fullTree = batchExpandQuarters(fullTree, profile, board);
-    fullTree = batchExpandMonths(fullTree, profile, board, mergedEmployees.map(e => ({
-      id: e.id, name: e.name, department: e.department, role: e.role, baseSalary: e.baseSalary
-    })));
+    const fullTree = generateRoadmapTree(profile, board);
 
     const newRoadmap: Roadmap = {
       id: `rm_${Date.now()}`,

@@ -5,7 +5,7 @@
 // ============================================================
 
 import { GoogleGenAI } from '@google/genai';
-import { CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan, RoadmapNode } from './roadmap-types';
+import { CompanyProfile, BoardAnalysis, CFOAnalysis, CEOStrategy, HRPlan, RoadmapNode, getCashflowStatus } from './roadmap-types';
 import { generateBoardAnalysis as fallbackBoard, generateRoadmapTree as fallbackTree } from './ai-engine';
 import { formatVND } from './format';
 
@@ -22,7 +22,14 @@ export type StreamEvent =
   | { type: 'phase'; phase: 'cfo' | 'ceo' | 'hr' | 'tree' | 'done'; label: string }
   | { type: 'thinking'; phase: 'cfo' | 'ceo' | 'hr'; text: string }
   | { type: 'result'; data: { board: BoardAnalysis; tree: RoadmapNode; generatedAt: string } }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'drill-phase'; label: string }
+  | { type: 'drill-thinking'; text: string }
+  | { type: 'drill-result'; children: RoadmapNode[] }
+  | { type: 'drill-error'; message: string };
+
+// ---- Random ID helper ----
+function rid(): string { return Math.random().toString(36).substring(2, 10); }
 
 // ============================================================
 // Core Gemini call with thinking
@@ -417,4 +424,331 @@ export async function generateBoardStreaming(
     console.error('Gemini streaming error:', errMsg);
     onEvent({ type: 'error', message: `Gemini API lỗi: ${errMsg}` });
   }
+}
+
+// ============================================================
+// Drill-down: Quarter → 3 Months
+// ============================================================
+
+export async function geminiExpandQuarter(
+  profile: CompanyProfile,
+  board: BoardAnalysis,
+  quarterNode: RoadmapNode,
+  onThought?: (text: string) => void,
+): Promise<RoadmapNode[]> {
+  const matchingGoal = board.ceo.quarterlyGoals.find(
+    (q) => q.theme === quarterNode.theme || q.revenue === quarterNode.revenue,
+  );
+
+  const profitPercent = board.cfo.budgetAllocation.profit.percent;
+  const expenseRatio = (100 - profitPercent) / 100;
+
+  const systemPrompt = `Bạn là chuyên gia hoạch định chiến lược kinh doanh với 20 năm kinh nghiệm. Cho chiến lược quý, hãy tạo 3 kế hoạch tháng chi tiết.
+
+NGUYÊN TẮC:
+- Doanh thu 3 tháng PHẢI cộng lại ĐÚNG BẰNG doanh thu quý (${quarterNode.revenue})
+- Chi phí mỗi tháng = doanh thu tháng × ${expenseRatio} (tỷ lệ chi phí = (100 - ${profitPercent}%) / 100)
+- Mỗi tháng phải có chủ đề/trọng tâm KHÁC NHAU
+- KPIs phải CỤ THỂ và ĐO LƯỜNG ĐƯỢC (có con số)
+
+JSON format (CHỈ JSON, không markdown):
+[
+  {
+    "title": "Tháng X",
+    "description": "Chi tiết hoạt động tháng...",
+    "theme": "Chủ đề tháng",
+    "department": "Phòng ban trọng tâm",
+    "revenue": number,
+    "expense": number,
+    "kpis": ["KPI cụ thể 1", "KPI cụ thể 2"]
+  }
+]
+
+Trả về ĐÚNG 3 phần tử.`;
+
+  const deptList = board.hr.departments.map((d) => `${d.name} (${d.headcount} người, roles: ${d.keyRoles.join(', ')})`).join('\n');
+
+  const userPrompt = `THÔNG TIN CÔNG TY:
+- Tên: ${profile.companyName}
+- Ngành: ${profile.industry}
+- Sản phẩm: ${profile.products}
+- Mục tiêu: ${profile.objective}
+
+CHIẾN LƯỢC QUÝ:
+- Tiêu đề: ${quarterNode.title}
+- Chủ đề: ${quarterNode.theme || 'N/A'}
+- Mô tả: ${quarterNode.description}
+- Doanh thu quý: ${quarterNode.revenue}
+${matchingGoal ? `\nMỤC TIÊU CEO CHO QUÝ:
+- Mục tiêu chính: ${matchingGoal.keyObjectives.join(', ')}` : ''}
+${quarterNode.milestones ? `- Milestones: ${quarterNode.milestones.join(', ')}` : ''}
+
+NGÂN SÁCH CFO:
+- COGS: ${board.cfo.budgetAllocation.cogs.percent}%
+- HR: ${board.cfo.budgetAllocation.hr.percent}%
+- Marketing: ${board.cfo.budgetAllocation.marketing.percent}%
+- Operations: ${board.cfo.budgetAllocation.operations.percent}%
+- Lợi nhuận: ${profitPercent}%
+
+PHÒNG BAN NHÂN SỰ:
+${deptList}
+
+KPIs CÔNG TY:
+${board.ceo.companyKPIs.join('\n')}
+
+Hãy tạo kế hoạch 3 tháng chi tiết cho quý này.`;
+
+  const text = await callGeminiWithThinking(systemPrompt, userPrompt, onThought, 4096);
+  const months: { title: string; description: string; theme: string; department: string; revenue: number; expense: number; kpis: string[] }[] = JSON.parse(text);
+
+  return months.map((m) => ({
+    id: rid(),
+    level: 'month' as const,
+    title: m.title,
+    description: m.description,
+    theme: m.theme,
+    department: m.department,
+    revenue: m.revenue,
+    expense: m.expense,
+    cashflow: m.revenue - m.expense,
+    cashflowStatus: getCashflowStatus(m.revenue, m.expense),
+    kpis: m.kpis,
+    children: undefined,
+    isExpanded: false,
+  }));
+}
+
+// ============================================================
+// Drill-down: Month → 4 Weeks
+// ============================================================
+
+export async function geminiExpandMonth(
+  profile: CompanyProfile,
+  board: BoardAnalysis,
+  monthNode: RoadmapNode,
+  quarterContext: { theme: string; milestones: string[] },
+  onThought?: (text: string) => void,
+): Promise<RoadmapNode[]> {
+  const systemPrompt = `Bạn là quản lý vận hành cấp cao. Hãy tạo 4 kế hoạch tuần chi tiết cho tháng được giao.
+
+NGUYÊN TẮC:
+- Doanh thu 4 tuần PHẢI cộng lại ĐÚNG BẰNG doanh thu tháng (${monthNode.revenue})
+- Chi phí mỗi tuần phải hợp lý theo tỷ lệ
+- Mỗi tuần có trọng tâm hoạt động khác nhau
+- KPIs phải CỤ THỂ và ĐO LƯỜNG ĐƯỢC
+
+JSON format (CHỈ JSON, không markdown):
+[
+  {
+    "title": "Tuần X",
+    "description": "Mô tả hoạt động tuần...",
+    "revenue": number,
+    "expense": number,
+    "kpis": ["KPI cụ thể 1", "KPI cụ thể 2"]
+  }
+]
+
+Trả về ĐÚNG 4 phần tử.`;
+
+  const deptList = board.hr.departments.map((d) => `${d.name} (${d.headcount} người)`).join(', ');
+
+  const userPrompt = `THÔNG TIN CÔNG TY:
+- Tên: ${profile.companyName}
+- Ngành: ${profile.industry}
+- Sản phẩm: ${profile.products}
+- Mục tiêu: ${profile.objective}
+
+KẾ HOẠCH THÁNG:
+- Tiêu đề: ${monthNode.title}
+- Mô tả: ${monthNode.description}
+- Chủ đề: ${monthNode.theme || 'N/A'}
+- Doanh thu tháng: ${monthNode.revenue}
+- KPIs tháng: ${monthNode.kpis.join(', ')}
+
+BỐI CẢNH QUÝ:
+- Chủ đề quý: ${quarterContext.theme}
+- Milestones quý: ${quarterContext.milestones.join(', ')}
+
+PHÒNG BAN: ${deptList}
+
+Hãy tạo kế hoạch 4 tuần chi tiết.`;
+
+  const text = await callGeminiWithThinking(systemPrompt, userPrompt, onThought, 4096);
+  const weeks: { title: string; description: string; revenue: number; expense: number; kpis: string[] }[] = JSON.parse(text);
+
+  // Determine month index from title for date calculations
+  const monthMatch = monthNode.title.match(/(\d+)/);
+  const monthIndex = monthMatch ? parseInt(monthMatch[1], 10) - 1 : 0; // 0-based
+  const year = new Date().getFullYear();
+
+  return weeks.map((w, idx) => {
+    const weekStart = new Date(year, monthIndex, 1 + idx * 7);
+    const weekEnd = new Date(year, monthIndex, Math.min(7 + idx * 7, new Date(year, monthIndex + 1, 0).getDate()));
+
+    return {
+      id: rid(),
+      level: 'week' as const,
+      title: w.title,
+      description: w.description,
+      revenue: w.revenue,
+      expense: w.expense,
+      cashflow: w.revenue - w.expense,
+      cashflowStatus: getCashflowStatus(w.revenue, w.expense),
+      kpis: w.kpis,
+      startDate: weekStart.toISOString().split('T')[0],
+      endDate: weekEnd.toISOString().split('T')[0],
+      children: undefined,
+      isExpanded: false,
+    };
+  });
+}
+
+// ============================================================
+// Drill-down: Week → 5 Days with Task Assignments
+// ============================================================
+
+export async function geminiExpandWeek(
+  profile: CompanyProfile,
+  board: BoardAnalysis,
+  weekNode: RoadmapNode,
+  employees: { id: number; name: string; department: string; role: string; baseSalary: number }[],
+  onThought?: (text: string) => void,
+): Promise<RoadmapNode[]> {
+  const profitPercent = board.cfo.budgetAllocation.profit.percent;
+  const expenseRatio = (100 - profitPercent) / 100;
+  const weekExpense = weekNode.revenue * expenseRatio;
+
+  const structuredKpisText = board.ceo.structuredKpis
+    ? board.ceo.structuredKpis.map((k) => `ID ${k.id}: ${k.title}`).join('\n')
+    : board.ceo.companyKPIs.map((k, i) => `ID ${i + 1}: ${k}`).join('\n');
+
+  const employeeListText = employees.map((e) => `ID ${e.id}: ${e.name} — ${e.department} — ${e.role} — Lương: ${e.baseSalary}`).join('\n');
+
+  const systemPrompt = `Bạn là Giám đốc Nhân sự vận hành. Hãy tạo kế hoạch phân công công việc chi tiết cho 5 ngày làm việc (Thứ 2 - Thứ 6) cho một đội ngũ.
+
+NGUYÊN TẮC:
+- assigneeId PHẢI là ID thực tế trong danh sách nhân viên được cung cấp
+- Mỗi nhân viên được giao công việc phù hợp với phòng ban/vai trò của họ
+- bonusPercent: từ 5% đến 20%
+  + Nhân viên Sales/Marketing (tạo doanh thu): bonusPercent cao hơn (15-20%)
+  + Nhân viên vận hành/hỗ trợ: bonusPercent thấp hơn (5-10%)
+- Doanh thu 5 ngày PHẢI cộng lại ĐÚNG BẰNG doanh thu tuần (${weekNode.revenue})
+- Chi phí tuần ước tính: ${Math.round(weekExpense)}
+- Mỗi task phải có personalKPI CỤ THỂ và ĐO LƯỜNG ĐƯỢC
+- Mỗi ngày có 3-5 tasks
+
+JSON format (CHỈ JSON, không markdown):
+[
+  {
+    "title": "Thứ 2",
+    "description": "Mô tả hoạt động ngày...",
+    "revenue": number,
+    "expense": number,
+    "tasks": [
+      {
+        "title": "Tên công việc cụ thể",
+        "description": "Mô tả chi tiết",
+        "assigneeId": number,
+        "personalKPI": "KPI cá nhân cụ thể, đo lường được",
+        "linkedKpiId": number,
+        "bonusPercent": number,
+        "department": "Phòng ban"
+      }
+    ]
+  }
+]
+
+Trả về ĐÚNG 5 phần tử (5 ngày).`;
+
+  const userPrompt = `THÔNG TIN CÔNG TY:
+- Tên: ${profile.companyName}
+- Ngành: ${profile.industry}
+- Sản phẩm: ${profile.products}
+- Mục tiêu: ${profile.objective}
+
+KẾ HOẠCH TUẦN:
+- Tiêu đề: ${weekNode.title}
+- Mô tả: ${weekNode.description}
+- Doanh thu tuần: ${weekNode.revenue}
+- Chi phí tuần ước tính: ${Math.round(weekExpense)}
+- KPIs tuần: ${weekNode.kpis.join(', ')}
+
+DANH SÁCH NHÂN VIÊN:
+${employeeListText}
+
+KPIs CẤU TRÚC CỦA CEO:
+${structuredKpisText}
+
+Hãy phân công công việc chi tiết cho 5 ngày, gán đúng nhân viên theo năng lực và phòng ban.`;
+
+  const text = await callGeminiWithThinking(systemPrompt, userPrompt, onThought, 16384);
+  const days: {
+    title: string;
+    description: string;
+    revenue: number;
+    expense: number;
+    tasks: {
+      title: string;
+      description: string;
+      assigneeId: number;
+      personalKPI: string;
+      linkedKpiId: number;
+      bonusPercent: number;
+      department: string;
+    }[];
+  }[] = JSON.parse(text);
+
+  // Build employee lookup
+  const empMap = new Map(employees.map((e) => [e.id, e]));
+
+  // Calculate start date from weekNode
+  const startDate = weekNode.startDate ? new Date(weekNode.startDate) : new Date();
+
+  return days.map((day, dayIdx) => {
+    const dayDate = new Date(startDate);
+    dayDate.setDate(dayDate.getDate() + dayIdx);
+    const dayDateStr = dayDate.toISOString().split('T')[0];
+
+    const taskChildren: RoadmapNode[] = day.tasks.map((t) => {
+      const emp = empMap.get(t.assigneeId);
+      const baseSalary = emp?.baseSalary ?? 0;
+      const bonusAmount = Math.round((baseSalary * t.bonusPercent) / 100 / 22);
+
+      return {
+        id: rid(),
+        level: 'task' as const,
+        title: t.title,
+        description: t.description,
+        department: t.department,
+        revenue: 0,
+        expense: bonusAmount,
+        cashflow: -bonusAmount,
+        cashflowStatus: getCashflowStatus(0, bonusAmount),
+        kpis: [t.personalKPI],
+        assigneeId: t.assigneeId,
+        assigneeName: emp?.name ?? `Employee #${t.assigneeId}`,
+        personalKPI: t.personalKPI,
+        linkedKpiId: t.linkedKpiId,
+        kpiContribution: 1,
+        bonusPercent: t.bonusPercent,
+        bonusAmount,
+        syncedToTasks: false,
+      };
+    });
+
+    return {
+      id: rid(),
+      level: 'day' as const,
+      title: day.title,
+      description: day.description,
+      revenue: day.revenue,
+      expense: day.expense,
+      cashflow: day.revenue - day.expense,
+      cashflowStatus: getCashflowStatus(day.revenue, day.expense),
+      kpis: [],
+      startDate: dayDateStr,
+      children: taskChildren,
+      isExpanded: true,
+    };
+  });
 }
