@@ -65,11 +65,12 @@ const DEPT_COLORS = ['#4f46e5', '#3b82f6', '#8b5cf6', '#06b6d4', '#10b981', '#f5
 
 // ── Main Component ────────────────────────────────────────
 export default function HRM() {
-  const { employees, setEmployees, finance } = useAppContext();
+  const { employees, setEmployees, finance, tasks } = useAppContext();
   const [activeTab, setActiveTab] = useState<'list' | 'org'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState<Partial<Employee>>({ status: 'Đang làm việc', managerId: 1 });
+  const [activeDept, setActiveDept] = useState<string | null>(null);
 
   const hrBudget = (finance.targetRevenue * finance.allocations.hr) / 100;
   const currentPayroll = useMemo(() => employees.reduce((s, e) => s + e.baseSalary, 0), [employees]);
@@ -86,15 +87,33 @@ export default function HRM() {
     return Object.entries(map).map(([name, d]) => ({ name, ...d })).sort((a, b) => b.count - a.count);
   }, [employees]);
 
+  const employeeMetricsMap = useMemo(() => {
+    const map = new Map<number, { todo: number; inProgress: number; done: number; totalBonus: number; rate: number }>();
+    employees.forEach(emp => {
+      const empTasks = tasks.filter(t => t.assigneeId === emp.id);
+      const todo = empTasks.filter(t => t.status === 'todo').length;
+      const inProgress = empTasks.filter(t => t.status === 'in-progress').length;
+      const done = empTasks.filter(t => t.status === 'done').length;
+      const totalBonus = empTasks.reduce((s, t) => s + (t.bonusAmount || 0), 0);
+      const rate = empTasks.length > 0 ? Math.round(done / empTasks.length * 100) : 0;
+      map.set(emp.id, { todo, inProgress, done, totalBonus, rate });
+    });
+    return map;
+  }, [employees, tasks]);
+
   // ── Search ──────────────────────────────────────────────
   const filteredEmployees = useMemo(() => {
-    if (!searchQuery) return employees;
-    const q = searchQuery.toLowerCase();
-    return employees.filter(e =>
-      e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q) ||
-      e.department.toLowerCase().includes(q) || e.role.toLowerCase().includes(q)
-    );
-  }, [employees, searchQuery]);
+    let result = employees;
+    if (activeDept) result = result.filter(e => e.department === activeDept);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(e =>
+        e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q) ||
+        e.department.toLowerCase().includes(q) || e.role.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [employees, searchQuery, activeDept]);
 
   // ── ReactFlow org chart ─────────────────────────────────
   const { orgNodes, orgEdges } = useMemo(() => {
@@ -181,6 +200,7 @@ export default function HRM() {
           <p className="text-[10px] font-bold text-muted-foreground uppercase">Quỹ lương</p>
           <p className="text-lg font-bold text-foreground mt-1">{formatVND(currentPayroll)}</p>
           <p className="text-[10px] text-muted-foreground">{employees.length} nhân sự</p>
+          <p className="text-[10px] text-muted-foreground">TB: {formatVND(Math.round(currentPayroll / (employees.length || 1)))}/người</p>
         </div>
         <div className={`rounded-xl p-4 border ${remainingBudget >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
           <p className={`text-[10px] font-bold uppercase ${remainingBudget >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>Còn lại</p>
@@ -188,7 +208,7 @@ export default function HRM() {
           <p className={`text-[10px] ${remainingBudget >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{remainingBudget >= 0 ? 'Có thể tuyển thêm' : 'Vượt ngân sách'}</p>
         </div>
         <div className="glass-card p-4">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase">Budget usage</p>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase">Sử dụng ngân sách</p>
           <div className="mt-2">
             <div className="h-3 bg-muted/30 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all" style={{
@@ -229,6 +249,26 @@ export default function HRM() {
         </div>
       )}
 
+      {/* Department filter chips */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setActiveDept(null)}
+          className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${!activeDept ? 'bg-primary text-white' : 'bg-muted/30 text-foreground border border-border hover:bg-muted/50'}`}
+        >
+          Tất cả ({employees.length})
+        </button>
+        {deptStats.map((dept, i) => (
+          <button
+            key={dept.name}
+            onClick={() => setActiveDept(activeDept === dept.name ? null : dept.name)}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${activeDept === dept.name ? 'bg-primary text-white' : 'bg-muted/30 text-foreground border border-border hover:bg-muted/50'}`}
+          >
+            <span className="w-2 h-2 rounded-full" style={{ background: activeDept === dept.name ? 'white' : DEPT_COLORS[i % DEPT_COLORS.length] }} />
+            {dept.name} ({dept.count})
+          </button>
+        ))}
+      </div>
+
       {/* ── Tab content ────────────────────────────────────── */}
       {activeTab === 'list' ? (
         <div className="glass-card overflow-hidden">
@@ -246,7 +286,7 @@ export default function HRM() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredEmployees.map((person) => (
-                  <div key={person.id} className="glass-card flex flex-col p-4 hover:shadow-md transition-shadow relative group">
+                  <div key={person.id} className="glass-card flex flex-col p-4 hover:shadow-md transition-shadow relative group border-l-4" style={{ borderLeftColor: DEPT_COLORS[deptStats.findIndex(d => d.name === person.department) % DEPT_COLORS.length] || '#94a3b8' }}>
                     <button onClick={() => deleteEmployee(person.id)} className="absolute top-3 right-3 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
                       <X className="h-4 w-4" />
                     </button>
@@ -267,6 +307,36 @@ export default function HRM() {
                       {person.email && <div className="flex items-center gap-2"><Mail className="h-3 w-3" /><span className="truncate">{person.email}</span></div>}
                       <div className="flex items-center gap-2"><Wallet className="h-3 w-3" /><span className="font-semibold text-foreground">{formatVND(person.baseSalary, 'full')}</span></div>
                     </div>
+                    {/* Task metrics */}
+                    {(() => {
+                      const m = employeeMetricsMap.get(person.id);
+                      if (!m) return null;
+                      const total = m.todo + m.inProgress + m.done;
+                      return (
+                        <div className="space-y-2 mb-3">
+                          {total > 0 && (
+                            <>
+                              <div className="flex items-center gap-3 text-[10px]">
+                                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-slate-400" />{m.todo} chờ</span>
+                                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" />{m.inProgress} đang làm</span>
+                                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{m.done} xong</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-muted/40 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${m.rate}%` }} />
+                                </div>
+                                <span className="text-[10px] font-bold text-foreground">{m.rate}%</span>
+                              </div>
+                            </>
+                          )}
+                          {m.totalBonus > 0 && (
+                            <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                              +{formatVND(m.totalBonus)} thưởng
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div className="mt-auto pt-3 border-t border-border">
                       <Link href={`/erp/hrm/${person.id}`} className="text-primary hover:text-primary/80 font-medium text-xs flex items-center justify-center">
                         Xem chi tiết <ChevronRight className="h-3 w-3 ml-1" />
